@@ -1,0 +1,103 @@
+
+'''
+jayceon 2020/12/31
+'''
+
+class CheckNetwork():
+    def __init__(self, proj_name, proj_version):
+        import sim as csim
+        import net as cnet
+        import utime as time
+        import modem as mod
+        import dataCall as dc
+        from misc import Power as pw
+
+        self._sim = csim
+        self._net = cnet
+        self._time = time
+        self._modem = mod
+        self._dataCall = dc
+        self._Power = pw
+
+        self.PROJECT_NAME = proj_name
+        self.PROJECT_VERSION = proj_version
+        self.FIRMWARE_VERSION = self._modem.getDevFwVersion()
+        self.POWERON_REASON = self._Power.powerOnReason()
+
+    def poweron_print_once(self):
+        sim_sta = self._sim.getStatus()
+        print('==================================================')
+        print('PROJECT_NAME     : {}'.format(self.PROJECT_NAME))
+        print('PROJECT_VERSION  : {}'.format(self.PROJECT_VERSION))
+        print('FIRMWARE_VERSION : {}'.format(self.FIRMWARE_VERSION))
+        print('POWERON_REASON   : {}'.format(self.POWERON_REASON))
+        print('SIM_CARD_STATUS  : {}'.format(sim_sta))
+        print('==================================================')
+
+    def check_datacall_status(self):
+        for pdp in range(1, 8):
+            datacall_sta = self._dataCall.getInfo(pdp, 2)
+            if (datacall_sta != -1) and ((datacall_sta[2][0] == 1) or (datacall_sta[3][0] == 1)):
+                return 1
+            elif (datacall_sta != -1) and (datacall_sta[2][0] == 0) and (datacall_sta[3][0] == 0):
+                continue
+        return 0
+
+    '''
+    return format: stagecode, subcode, time
+    stagecode - 
+        1:Currently in the stage of getting SIM card state
+        2:Currently in the stage of getting network state
+        3:Currently in the stage of getting datacall state
+    subcode -
+        when stagecode = 1, subcode represents the state of the SIM card
+        when stagecode = 2, subcode represents the state of the network
+        when stagecode = 3, subcode represents the state of the datacall
+    '''
+    def wait_network_connected(self, timeout_s=60):
+        if (timeout_s < 1) or (timeout_s > 3600):
+            raise OSError("timeout_s should be in [1, 3600]s!")
+        timeout_ms = timeout_s * 1000
+
+        stage_code = 1
+        while True:
+            sim_sta = self._sim.getStatus()
+            if sim_sta == 1:
+                break
+            elif sim_sta == 0:
+                return stage_code, sim_sta
+            elif (sim_sta == 18) or (sim_sta == 20) or (sim_sta == 21):
+                self._time.sleep_ms(100)
+                timeout_ms -= 100
+                if timeout_ms <= 0:
+                    return stage_code, sim_sta
+            else:
+                return stage_code, sim_sta
+
+        stage_code = 2
+        while True:
+            net_sta = self._net.getState()
+            if net_sta == -1:
+                self._time.sleep_ms(100)
+                timeout_ms -= 100
+                if timeout_ms <= 0:
+                    return stage_code, -1
+            else:
+                if net_sta[1][0] == 1:
+                    break
+                else:
+                    self._time.sleep_ms(100)
+                    timeout_ms -= 100
+                    if timeout_ms <= 0:
+                        return stage_code, net_sta[1][0]
+
+        stage_code = 3
+        while True:
+            datacall_sta = self.check_datacall_status()
+            if datacall_sta == 1:
+                return stage_code, datacall_sta
+            else:
+                self._time.sleep_ms(100)
+                timeout_ms -= 100
+                if timeout_ms <= 0:
+                    return stage_code, datacall_sta

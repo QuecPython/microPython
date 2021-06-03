@@ -1,0 +1,37 @@
+
+config LVGL 
+    bool "Enable lvgl" 
+    default n 
+help 
+    This is lvgl support.
+
+menu "lvgl option"
+	depends on LVGL
+
+	source "../services/microPython/config/lvgl_option.in"
+	endmenu 
+
+config QRCODE 
+    bool "Enable qrcode" 
+    default n 
+help 
+    This is qrcode support.
+
+config POC 
+    bool "Enable poc" 
+    default n 
+help 
+    This is poc support.
+
+config CAMERA 
+    bool "Enable camera" 
+    default n 
+help 
+    This is camera support.
+
+config SPINAND 
+    bool "Enable spi nand flash" 
+    default n 
+help 
+    This is SPINANDFLASH support.
+

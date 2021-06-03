@@ -1,0 +1,199 @@
+
+config LVGL_CONT
+    bool "Enable lvgl_cont" 
+    default y 
+help 
+    This is lvgl_cont support.
+
+config LVGL_BTN
+    bool "Enable lvgl_btn" 
+    default y 
+help 
+    This is lvgl_btn support.
+
+config LVGL_IMGBTN 
+    bool "Enable lvgl_imgbtn" 
+    default n 
+help 
+    This is lvgl_imgbtn support.
+
+config LVGL_LABEL
+    bool "Enable lvgl_label" 
+    default y 
+help 
+    This is lvgl_label support.
+	
+config LVGL_IMG
+    bool "Enable lvgl_img" 
+    default y 
+help 
+    This is lvgl_img support.
+
+config LVGL_LINE 
+    bool "Enable lvgl_line" 
+    default n 
+help 
+    This is lvgl_line support.
+
+config LVGL_PAGE
+    bool "Enable lvgl_page" 
+    default n 
+help 
+    This is lvgl_page support.
+
+config LVGL_LIST 
+    bool "Enable lvgl_list" 
+    default n 
+help 
+    This is lvgl_list support.
+	
+config LVGL_CHART
+    bool "Enable lvgl_chart" 
+    default n 
+help 
+    This is lvgl_chart support.
+
+config LVGL_TABLE 
+    bool "Enable lvgl_table" 
+    default n
+help 
+    This is lvgl_table support.
+
+config LVGL_CB
+    bool "Enable lvgl_cb" 
+    default n 
+help 
+    This is lvgl_cb support.
+
+config LVGL_CPICKER 
+    bool "Enable lvgl_cpicker" 
+    default n 
+help 
+    This is lvgl_cpicker support.
+	
+config LVGL_BAR
+    bool "Enable lvgl_bar" 
+    default n 
+help 
+    This is lvgl_bar support.
+
+config LVGL_SLIDER 
+    bool "Enable lvgl_slider" 
+    default y 
+help 
+    This is lvgl_slider support.
+
+config LVGL_LED
+    bool "Enable lvgl_led" 
+    default n 
+help 
+    This is lvgl_led support.
+
+config LVGL_BTNM
+    bool "Enable lvgl_btnm" 
+    default n 
+help 
+    This is lvgl_btnm support.
+	
+
+config LVGL_KB
+    bool "Enable lvgl_kb" 
+    default n
+help 
+    This is lvgl_kb support.
+
+config LVGL_DDLIST
+    bool "Enable lvgl_ddlist" 
+    default n
+help 
+    This is lvgl_ddlist support.
+
+config LVGL_ROLLER
+    bool "Enable lvgl_roller" 
+    default y 
+help 
+    This is lvgl_roller support.
+
+config LVGL_TA
+    bool "Enable lvgl_ta" 
+    default n 
+help 
+    This is lvgl_ta support.
+	
+config LVGL_CANVAS
+    bool "Enable lvgl_canvas" 
+    default n 
+help 
+    This is lvgl_canvas support.
+
+config LVGL_WIN
+    bool "Enable lvgl_win" 
+    default n 
+help 
+    This is lvgl_win support.
+
+config LVGL_TABVIEW
+    bool "Enable lvgl_tabview" 
+    default n 
+help 
+    This is lvgl_tabview support.
+
+config LVGL_TILEVIEW 
+    bool "Enable lvgl_tileview" 
+    default n 
+help 
+    This is lvgl_tileview support.
+	
+config LVGL_MBOX
+    bool "Enable lvgl_mbox" 
+    default n 
+help 
+    This is lvgl_mbox support.
+
+config LVGL_LMETER 
+    bool "Enable lvgl_lmeter" 
+    default n 
+help 
+    This is lvgl_lmeter support.
+
+config LVGL_GAUGE
+    bool "Enable lvgl_gauge" 
+    default n 
+help 
+    This is lvgl_gauge support.
+
+config LVGL_SW
+    bool "Enable lvgl_sw" 
+    default y 
+help 
+    This is lvgl_sw support.
+	
+config LVGL_ARC
+    bool "Enable lvgl_arc" 
+    default y 
+help 
+    This is lvgl_arc support.
+
+config LVGL_PRELOAD 
+    bool "Enable lvgl_preload" 
+    default n 
+help 
+    This is lvgl_preload support.
+
+config LVGL_CALENDAR
+    bool "Enable lvgl_calendar" 
+    default n 
+help 
+    This is lvgl_calendar support.
+
+config LVGL_SPINBOX
+    bool "Enable lvgl_spinbox" 
+    default n 
+help 
+    This is lvgl_spinbox support.
+	
+config LVGL_FONT_CHINESE_11
+    bool "Enable lvgl_spinbox" 
+    default n 
+help 
+    This is lvgl_spinbox support.
