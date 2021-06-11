@@ -2,6 +2,7 @@
  * The MIT License (MIT)
  * 
  * Copyright (c) 2021, QUECTEL  
+ * Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -325,7 +326,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sim_unblock_pin_obj, qpy_sim_unblock_pin);
  *	      - 9		SIM is blocked; CHV2 unblocking password is required.
  *	      - 10		SIM is locked due to a network personalization check failure.
  *	      - 11		SIM is blocked due to an incorrect NCK; an MEP unblocking password is required.
- *	      - 12		SIM is locked due to a network subset personalization check failure.
+ *	      - 12		
+SIM is locked due to a network subset personalization check failure.
  *	      - 13		SIM is blocked due to an incorrect NSCK; an MEP unblocking password is required.
  *	      - 14		SIM is locked due to a service provider personalization check failure.
  *	      - 15		SIM is blocked due to an incorrect SPCK; an MEP unblocking password is required.
