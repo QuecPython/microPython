@@ -227,7 +227,8 @@ $(NAME)_INCS = \
 
 EMPTY=
 SPACE=$(EMPTY) $(EMPTY)
-BUILD_TIMESTAMP="$(subst $(SPACE),-,$(shell echo $$(date)))"
+COMMA=$(EMPTY),$(EMPTY)
+BUILD_TIMESTAMP=\\\"$(subst $(SPACE),_,$(subst $(COMMA),,$(shell echo $$(env LANG=en_US.UTF-8 date))))\\\"
 $(NAME)_DEFINE = \
 	MP_ENDIANNESS_LITTLE \
 	MICROPY_BUILD_DATE=\"${BUILD_TIMESTAMP}\"
