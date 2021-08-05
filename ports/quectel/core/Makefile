@@ -22,11 +22,11 @@ endif
 ifndef BUILD_VERBOSE
 BUILD_VERBOSE = 0
 endif
-ifeq ($(BUILD_VERBOSE),0)
-Q = @
-else
-Q =
-endif
+# ifeq ($(BUILD_VERBOSE),0)
+# Q = @
+# else
+# Q =
+# endif
 
 BUILD ?= build
 FROZEN_MPY_DIR ?= .
@@ -306,7 +306,7 @@ endif
 endif
 
 $(BUILD)/%.pp: %.c
-	$(ECHO) "PreProcess $<"
+	@$(ECHO) "PreProcess $<"
 	$(Q)$(CPP) $(C_FLAGS) -Wp,-C,-dD,-dI -o $@ $<
 
 # Anything that depends on FORCE will be considered out-of-date
@@ -329,7 +329,7 @@ MPCONFIGPORT_MK = $(wildcard mpconfigport.mk)
 # the lines in "" and then unwrap after the preprocessor is finished.
 # See more information about this process in docs/develop/qstr.rst.
 $(HEADER_BUILD)/qstrdefs.generated.h: $(PY_QSTR_DEFS) $(QSTR_DEFS) $(QSTR_DEFS_COLLECTED) $(PY_SRC)/makeqstrdata.py source/mpconfigport.h $(MPCONFIGPORT_MK) $(PY_SRC)/mpconfig.h | $(HEADER_BUILD)
-	$(ECHO) "GEN $@"
+	@$(ECHO) "GEN $@"
 	$(Q)$(CAT) $(PY_QSTR_DEFS) $(QSTR_DEFS) $(QSTR_DEFS_COLLECTED) | $(SED) 's/^Q(.*)/"&"/' | $(CPP) $(C_FLAGS) - | $(SED) 's/^\"\(Q(.*)\)\"/\1/' > $(HEADER_BUILD)/qstrdefs.preprocessed.h
 	$(Q)$(PYTHON) $(PY_SRC)/makeqstrdata.py $(HEADER_BUILD)/qstrdefs.preprocessed.h > $@
 
@@ -402,6 +402,7 @@ INC += -I$(ROOT)/system/mbedtls
 INC += -I$(ROOT)/system/mbedtls/include
 INC += -I$(ROOT)/system/mbedtls/include/mbedtls
 INC += -I$(ROOT)/system/mbedtls/library
+INC += -I$(ROOT)/system/mbedtls/port/helios/inc
 INC += -I$(ROOT)/system/network
 INC += -I$(ROOT)/system/os
 INC += -I$(ROOT)/system/startup
@@ -423,7 +424,8 @@ INC += -I$(ROOT)/components/lvgl/src/lv_themes
 CWARN = -Wall -Werror
 CWARN += -Wpointer-arith -Wuninitialized
 C_FLAGS = $(INC) $(CWARN) -std=gnu99 $(C_FLAGS_MOD) $(COPT) $(C_FLAGS_EXTRA)
-C_FLAGS += -fdata-sections -ffunction-sections -fno-asynchronous-unwind-tables
+C_FLAGS += -fdata-sections -ffunction-sections -fno-asynchronous-unwind-tables --include=../../../../../../config/autoconf.h
+
 LD_FLAGS_ARCH = -Wl,-Map=$@.map,--cref -Wl,--gc-sections
 LD_FLAGS = $(LD_FLAGS_MOD) $(LD_FLAGS_ARCH) -lm $(LD_FLAGS_EXTRA)
 
@@ -434,33 +436,38 @@ D_FLAGS += -DMP_CONFIGFILE="\"ports/quectel/core/source/mpconfigport.h\"" \
 
 vpath %.S . $(TOP) $(USER_C_MODULES)
 $(BUILD)/%.o: %.S
-	$(ECHO) "CC $<"
+	@$(ECHO) "CC $<"
 	$(Q)$(CC) $(C_FLAGS) $(D_FLAGS) -c -o $@ $<
 
 vpath %.s . $(TOP) $(USER_C_MODULES)
 $(BUILD)/%.o: %.s
-	$(ECHO) "AS $<"
+	@$(ECHO) "AS $<"
 	$(Q)$(AS) -o $@ $<
 QSTR_GEN_EXTRA_C_FLAGS += -DNO_QSTR
 vpath %.c . $(TOP) $(USER_C_MODULES)
 $(BUILD)/%.pp: %.c
-	$(ECHO) "PreProcess $<"
+	@$(ECHO) "PreProcess $<"
 	$(Q)$(CPP) $(C_FLAGS) $(D_FLAGS) -Wp,-C,-dD,-dI -o $@ $<
 
 #$(OBJ): | $(HEADER_BUILD)/qstrdefs.generated.h $(HEADER_BUILD)/mpversion.h
 
 
 $(HEADER_BUILD)/qstr.i.last: $(SRC_QSTR) $(QSTR_GLOBAL_DEPENDENCIES) | $(QSTR_GLOBAL_REQUIREMENTS)
-	$(ECHO) "GEN $@"
-	$(Q)$(CPP) $(QSTR_GEN_EXTRA_C_FLAGS) $(C_FLAGS) $(D_FLAGS) $(if $(filter $?,$(QSTR_GLOBAL_DEPENDENCIES)),$^,$(if $?,$?,$^)) >$(HEADER_BUILD)/qstr.i.last
+	@$(ECHO) "GEN $@"
+	@rm -f $@
+	@for src in $(if $(filter $?,$(QSTR_GLOBAL_DEPENDENCIES)),$^,$(if $?,$?,$^)); \
+	do \
+		echo processing on $$src ...; \
+		$(CPP) $(QSTR_GEN_EXTRA_C_FLAGS) $(C_FLAGS) $(D_FLAGS) $$src >> $@; \
+	done
 
 $(HEADER_BUILD)/qstr.split: $(HEADER_BUILD)/qstr.i.last
-	$(ECHO) "GEN $@"
+	@$(ECHO) "GEN $@"
 	$(Q)$(PYTHON) $(PY_SRC)/makeqstrdefs.py split qstr $(HEADER_BUILD)/qstr.i.last $(HEADER_BUILD)/qstr $(QSTR_DEFS_COLLECTED)
 	$(Q)$(TOUCH) $@
 
 $(QSTR_DEFS_COLLECTED): $(HEADER_BUILD)/qstr.split
-	$(ECHO) "GEN $@"
+	@$(ECHO) "GEN $@"
 	$(Q)$(PYTHON) $(PY_SRC)/makeqstrdefs.py cat qstr $(HEADER_BUILD)/qstr.i.last $(HEADER_BUILD)/qstr $(QSTR_DEFS_COLLECTED)
 
 
