@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include "runtime.h"
 #include "helios_audio.h"
-#include "Helios_debug.h"
+#include "helios_debug.h"
 
 typedef struct _audio_obj_t {
     mp_obj_base_t base;

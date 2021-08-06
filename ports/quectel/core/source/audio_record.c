@@ -28,8 +28,8 @@
 #include "stdlib.h"
 #include "string.h"	
 #include "linklist.h"
-#include "Helios_audio.h"
-#include "Helios_debug.h"
+#include "helios_audio.h"
+#include "helios_debug.h"
 #include "helios_fs.h"
 #include "helios_os.h"
 
