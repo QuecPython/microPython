@@ -46,8 +46,12 @@ STATIC const mp_rom_map_elem_t mp_module_camera_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_camera) },
     { MP_ROM_QSTR(MP_QSTR_camPreview), MP_ROM_PTR(&camera_preview_type) },
   //  { MP_ROM_QSTR(MP_QSTR_camRecord), MP_ROM_PTR(&camer_record_type) },
-   // { MP_ROM_QSTR(MP_QSTR_camCaputre), MP_ROM_PTR(&camera_capture_type) },
+#ifdef CONFIG_CAMERA_SAVEPHOTOS
+    { MP_ROM_QSTR(MP_QSTR_camCaputre), MP_ROM_PTR(&camera_capture_type) }, 
+#endif
+#ifdef CONFIG_CAMERA_DECODE   
     { MP_ROM_QSTR(MP_QSTR_camScandecode), MP_ROM_PTR(&camera_scandecode_type) },
+#endif
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_camera_globals, mp_module_camera_globals_table);
 

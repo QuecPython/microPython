@@ -71,7 +71,11 @@ STATIC mp_obj_t qpy_lbs_get_cell_coordinates(size_t n_args, const mp_obj_t *args
 	}
 	if ((profile_idx < (int)HELIOS_PROFILE_IDX_MIN) || (profile_idx > (int)HELIOS_PROFILE_IDX_MAX))
 	{
-		mp_raise_ValueError("profileIdx invalid.");
+#if defined (PLAT_ASR)
+		mp_raise_ValueError("invalid value, profileIdx should be in [1,8].");
+#elif defined (PLAT_Unisoc)
+		mp_raise_ValueError("invalid value, profileIdx should be in [1,7].");
+#endif
 	}
 	
 	ret = Helios_DataCall_GetInfo(profile_idx, 0, &datacall_info);

@@ -28,6 +28,8 @@ Perfect auto datacall function
 Jayceon.Fu - 2020/10/24
 Modify the restart data call, from synchronous datacall to asynchronous datacall
 '''
+global datacall_flag
+datacall_flag = 1
 
 def _call_by_default_apn():
     dataCall.setAutoConnect(1, 1)
@@ -83,10 +85,12 @@ def _check_data_call():
     return 0
 
 def _repl_enable():
+    global datacall_flag
     if "system_config.json" in uos.listdir("usr/"):
         with open("/usr/system_config.json", "r", encoding='utf-8') as fd:
             json_data = ujson.load(fd)
             repl_flag = json_data.get("replFlag", 0)
+            datacall_flag = json_data.get("datacallFlag",1)
             misc.replEnable(repl_flag)
     else:
         with open("/usr/system_config.json", "w+", encoding='utf-8') as fd:
@@ -111,8 +115,10 @@ except Exception:
     print('error ocurs in boot step.')
 
 finally:
-    ret = _check_data_call()
-    if ret == 0:
-        _auto_data_call()
-_repl_enable()
+    #global datacall_flag
+    _repl_enable()
+    if datacall_flag == 1:
+        ret = _check_data_call()
+        if ret == 0:
+            _auto_data_call()
 

@@ -30,6 +30,22 @@ def getInfo(profileidx, iptype):
 
 
 def setApn(profileidx, iptype, apn, username, password, authtype):
+    retval = dial.getPdpRange()
+    min = retval[0]
+    max = retval[1]
+    if profileidx < min or profileidx > max:
+        raise ValueError("invalid value, profileIdx should be in [{},{}].".format(min, max))
+    if iptype < 0 or iptype > 2:
+        raise ValueError("invalid value, iptype should be in [0,2].")
+    if len(apn) > 63:
+        raise ValueError("invalid value, the length of apn should be no more than 63 bytes.")
+    if len(username) > 15:
+        raise ValueError("invalid value, the length of username should be no more than 15 bytes.")
+    if len(password) > 15:
+        raise ValueError("invalid value, the length of password should be no more than 15 bytes.")
+    if authtype < 0 or authtype > 2:
+        raise ValueError("invalid value, authtype should be in [0,2].")
+        
     with open("/usr/user_apn.json", "w+", encoding='utf-8') as fd:
         apn_dict = \
             {

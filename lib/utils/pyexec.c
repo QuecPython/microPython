@@ -47,6 +47,7 @@
 #include "mpversion.h"
 #include "helios_dev.h"
 
+
 pyexec_mode_kind_t pyexec_mode_kind = PYEXEC_MODE_FRIENDLY_REPL;
 int pyexec_system_exit = 0;
 
@@ -552,8 +553,11 @@ raw_repl_reset:
 //extern const char mob_model_id[];
 
 int pyexec_friendly_repl(void) {
+#if !defined(PLAT_RDA)
     char mob_model_id[64] = {0};
 	char printf_info[256] = {0};
+#endif
+
     vstr_t line;
     vstr_init(&line, 32);
 
@@ -566,9 +570,12 @@ int pyexec_friendly_repl(void) {
 friendly_repl_reset:
     //mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
 	//mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on "  "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
+#if !defined(PLAT_RDA)
 	Helios_Dev_GetModel((void *)mob_model_id, sizeof(mob_model_id));
 	sprintf(printf_info, "Quecpython %s on %s ; %s with %s \r\n ", MICROPY_GIT_TAG, MICROPY_BUILD_DATE, mob_model_id, MICROPY_HW_MCU_NAME);
 	mp_hal_stdout_tx_str(printf_info);
+#endif
+
 	#if MICROPY_PY_BUILTINS_HELP
     mp_hal_stdout_tx_str("Type \"help()\" for more information.\r\n");
     #endif

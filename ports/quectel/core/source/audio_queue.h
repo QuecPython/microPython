@@ -18,7 +18,8 @@
 #define __AUDIO_QUEUE_H__
 
 #include <stdint.h>
-#include "ql_api_osi.h"
+#include <string.h>
+#include "helios_os.h"
 
 #define QUEUE_SIZE 11
 #define QUEUE_NUMS 5
@@ -48,7 +49,10 @@ typedef struct
 	uint8_t cur_type;
 	uint8_t audio_state;  //1 - now playing; 2 - idle
 	uint8_t inited;
-	ql_mutex_t queue_mutex;
+	uint8_t total_nums;
+	uint8_t user_call_stop;
+	Helios_Mutex_t queue_mutex;
+	Helios_MsgQ_t queue_msg;
 }AUDIO_T;
 
 typedef enum
@@ -65,34 +69,19 @@ typedef enum
 
 typedef enum 
 {
-    QL_TTS_EVT_INIT,
-    QL_TTS_EVT_DEINIT,
-    QL_TTS_EVT_PLAY_START,
-    QL_TTS_EVT_PLAY_STOP,
-    QL_TTS_EVT_PLAY_FINISH,
-    QL_TTS_EVT_PLAY_FAILED,
-} QL_TTS_ENVENT_E;
+	AUDIO_ERROR_EVENT = -1,
+    AUDIO_START_EVENT,
+    AUDIO_FINISH_EVENT,
+    AUDIO_STOP_EVENT,
+}AUDIO_TTS_ENVENT_E;
 
-#if 0
-typedef enum
-{
-	AUD_PLAYER_ERROR 	= -1,
-	AUD_PLAYER_START 	= 0,
-	AUD_PLAYER_PAUSE 	= 1,
-	AUD_PLAYER_RECOVER	= 2,
-	AUD_PLAYER_PLAYING	= 3,
-	AUD_PLAYER_NODATA	= 4,
-    AUD_PLAYER_LESSDATA	= 5,
-    AUD_PLAYER_MOREDATA	= 6,
-	AUD_PLAYER_FINISHED	= 7,
-}enum_aud_player_state;
-#endif
 
 extern AUDIO_T audio;
 
 int audio_queue_init(AUDIO_QUEUE_T *Q);
 int audio_queue_is_empty(AUDIO_QUEUE_T *Q);
 int audio_queue_is_full(AUDIO_QUEUE_T *Q);
-void ql_audio_play_queue(void);
+void helios_audio_play_queue(void);
+void helios_audio_queue_play_task(void *argv);
 
 #endif

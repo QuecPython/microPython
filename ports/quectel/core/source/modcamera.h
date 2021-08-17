@@ -44,7 +44,7 @@ extern "C" {
 
 extern const mp_obj_type_t camera_preview_type;
 //extern const mp_obj_type_t camer_record_type;
-//extern const mp_obj_type_t camera_capture_type;
+extern const mp_obj_type_t camera_capture_type;
 extern const mp_obj_type_t camera_scandecode_type;
 
 

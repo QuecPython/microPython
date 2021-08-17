@@ -176,6 +176,8 @@ STATIC const mp_rom_map_elem_t machine_spi_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&machine_spi_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&machine_spi_write_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_write_read), MP_ROM_PTR(&machine_spi_write_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_SPI0), MP_ROM_INT(HELIOS_SPI0) },
+    { MP_ROM_QSTR(MP_QSTR_SPI1), MP_ROM_INT(HELIOS_SPI1) },
 };
 
 MP_DEFINE_CONST_DICT(mp_machine_hard_spi_locals_dict, machine_spi_locals_dict_table);

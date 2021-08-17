@@ -35,7 +35,6 @@ typedef struct _machine_wdt_obj_t
 {
 	int status;  // Y/N 
 	int period;
-	int count;
 }machine_wdt_obj_t;
 
 
@@ -49,15 +48,11 @@ STATIC mp_obj_t machine_wdt_make_new(const mp_obj_type_t *type, size_t n_args, s
 	if (n_args > 0)
 	{
 		info.period = mp_obj_get_int(args[0]);
-		info.count = mp_obj_get_int(args[0]);
 		--n_args;
 		++args;
 	}
-	info.period = 1;
-	//ql_machine_wdt_init(&info);
 	
-	
-	if(0 != Helios_WDT_Init((uint64_t) info.period,(uint64_t) info.count)) {
+	if(0 != Helios_WDT_Init((uint64_t) info.period)) {
 		return mp_const_false;
 	}
 	return MP_OBJ_FROM_PTR(self);

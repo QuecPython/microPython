@@ -19,7 +19,6 @@ import _thread
 from umqtt import MQTTClient
 import urandom
 from hashlib import sha256
-from machine import Timer
 import uos
 
 MQTT_SERVER = "{}.iot-as-mqtt.cn-shanghai.aliyuncs.com"
@@ -47,6 +46,9 @@ class aLiYun:
         self.username = "{}&{}".format(self.DeviceName, self.productKey)
         self.flag = True
         self.mqttObj = True
+        self.error_callback = None
+        self.reconn = True
+        self.listen_task_id = None
 
     def formatConnectInfo(self, secret, randomNum=None):
         secret = secret
@@ -58,8 +60,9 @@ class aLiYun:
             hmac_msg = HMAC.format(self.clientID, self.DeviceName, self.productKey)
         return mqt_id, secret, hmac_msg
 
-    def setMqtt(self, clientID=None, clean_session=True, keepAlive=300, reconn=True):
+    def setMqtt(self, clientID=None, clean_session=True, keepAlive=300, reconn=True, pingmaxnum=0):
         self.clientID = clientID
+        self.reconn = reconn
         if (not self.mqttObj) and (self.mqtt_client != None):
             return self.mqtt_client
         if self.productSecret == None:
@@ -72,7 +75,7 @@ class aLiYun:
                     self.DeviceSecret = msg
                     mqt_id, secret, hmac_msg = self.formatConnectInfo(self.DeviceSecret)
                     self.mqtt_client = self.connect(mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl=False,
-                                                    reconn=reconn)
+                                                    reconn=reconn, pingmaxnum=pingmaxnum)
                     print("[INFO] The MQTT connection was successful")
                     return 0
             print("[INFO] MQTT dynamic registration")
@@ -80,7 +83,7 @@ class aLiYun:
             randomNum = self.rundom()
             mqt_id, secret, hmac_msg = self.formatConnectInfo(self.productSecret, randomNum=randomNum)
             try:
-                mqtts_cl = self.connect(mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn=reconn)
+                mqtts_cl = self.connect(mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn=reconn, pingmaxnum=pingmaxnum)
             except:
                 return -1
             utime.sleep(2)
@@ -89,20 +92,20 @@ class aLiYun:
             mqtts_cl.disconnect()
             return 0
         try:
-            self.mqtt_client = self.connect(mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn=reconn)
+            self.connect(mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn=reconn, pingmaxnum=pingmaxnum)
             return 0
         except:
             return -1
 
-    def connect(self, mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn):
+    def connect(self, mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn, pingmaxnum):
         mqt_server = MQTT_SERVER.format(self.productKey)
         self.password = hmac.new(bytes(secret, "utf8"), msg=bytes(hmac_msg, "utf8"), digestmod=sha256).hexdigest()
-        mqtt_client = MQTTClient(mqt_id, mqt_server, self.port, self.username, self.password,
-                                 keepAlive, ssl=ssl, reconn=reconn)
-        mqtt_client.set_callback(self.proc)
-        mqtt_client.connect(clean_session=clean_session)
+        self.mqtt_client = MQTTClient(mqt_id, mqt_server, self.port, self.username, self.password,
+                                 keepAlive, ssl=ssl, reconn=reconn, pingmaxnum=pingmaxnum)
+        self.mqtt_client.set_callback(self.proc)
+        self.mqtt_client.connect(clean_session=clean_session)
         self.mqttObj = False
-        return mqtt_client
+        return self.mqtt_client
 
     def subscribe(self, topic, qos=0):
         try:
@@ -137,28 +140,26 @@ class aLiYun:
         self.recvCb = callback
 
     def disconnect(self):
-        self.flag = False
         self.mqttObj = True
+        if self.listen_task_id is not None:
+            _thread.stop_thread(self.listen_task_id)
+            self.listen_task_id = None
+            
         self.mqtt_client.disconnect()
 
     def close(self):
-        self.mqtt_client.close()
+        if self.mqtt_client is not None:
+            self.mqtt_client.close()
+        return -1
 
     def ping(self):
         self.mqtt_client.ping()
 
     def getAliyunSta(self):
-        alista = self.mqtt_client.get_mqttsta()
-        return alista
-
-    '''
-    def __loop_forever(self, t):
-        # print("loop_forever")
-        try:
-            self.mqtt_client.ping()
-        except:
-            return -1
-    '''
+        if self.mqtt_client is not None:
+            alista = self.mqtt_client.get_mqttsta()
+            return alista
+        return -1
 
     def __listen(self):
         while True:
@@ -168,10 +169,24 @@ class aLiYun:
                 else:
                     self.mqtt_client.wait_msg()
             except OSError as e:
+                if not self.flag:
+                    break
+                if self.error_callback is not None:
+                    self.error_callback(str(e))
+                    break
                 raise e
 
+
+    def error_register_cb(self, func):
+        self.error_callback = func
+        if self.mqtt_client is not None:
+            self.mqtt_client.error_register_cb(func)
+
     def start(self):
-        _thread.start_new_thread(self.__listen, ())
+        task_stacksize =_thread.stack_size()
+        _thread.stack_size(16*1024)
+        self.listen_task_id = _thread.start_new_thread(self.__listen, ())
+        _thread.stack_size(task_stacksize)
         # t = Timer(1)
         # t.start(period=20000, mode=t.PERIODIC, callback=self.__loop_forever)
 
@@ -207,4 +222,3 @@ def check_secret(deviceName):
     if device_secret != None:
         return device_secret
     return False
-

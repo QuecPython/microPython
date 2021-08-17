@@ -25,6 +25,33 @@
 
 static mp_obj_t g_sms_user_callback;
 
+STATIC mp_obj_t qpy_sms_pdu_decode(mp_obj_t data, mp_obj_t datalen)
+{
+	char *pdu_data = (char *)mp_obj_str_get_str(data);
+    int pdu_datalen = mp_obj_get_int(datalen);
+
+	if ((pdu_data == NULL) || (pdu_datalen <= 0))
+	{
+		mp_raise_ValueError("invalid value.");
+	}
+    Helios_SMSStatusInfo info = {0};
+	int ret = Helios_SMS_DecodePdu(&info, pdu_data);
+	if (ret == 0)
+	{
+		mp_obj_t msg_info[4] = 
+		{
+			mp_obj_new_str(info.number, strlen(info.number)),
+			mp_obj_new_str(info.body, strlen(info.body)),
+			mp_obj_new_str(info.time, strlen(info.time)),
+			mp_obj_new_int(info.body_len),
+		};
+		return mp_obj_new_tuple(4, msg_info);
+	}
+
+    return mp_obj_new_int(-1); 
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sms_pdu_decode_obj, qpy_sms_pdu_decode);
+
 /*=============================================================================*/
 /* FUNCTION: qpy_sms_send_text_msg                                             */
 /*=============================================================================*/
@@ -495,6 +522,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_sms_add_event_handler_obj, qpy_sms_add_even
 
 STATIC const mp_rom_map_elem_t mp_module_sms_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),           MP_ROM_QSTR(MP_QSTR_sms) },
+    { MP_ROM_QSTR(MP_QSTR_decodePdu),          MP_ROM_PTR(&qpy_sms_pdu_decode_obj) },
     { MP_ROM_QSTR(MP_QSTR_sendTextMsg),        MP_ROM_PTR(&qpy_sms_send_text_msg_obj) },
     { MP_ROM_QSTR(MP_QSTR_sendPduMsg),         MP_ROM_PTR(&qpy_sms_send_pdu_msg_obj) },
     { MP_ROM_QSTR(MP_QSTR_deleteMsg),          MP_ROM_PTR(&qpy_sms_delete_msg_obj) },

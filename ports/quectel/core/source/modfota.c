@@ -162,32 +162,40 @@ static void mpFotaProgressCB(int sta, int progress)
 	}
 }
 
-STATIC mp_obj_t fota_firmware_download(size_t n_args, const mp_obj_t *args)
+
+STATIC mp_obj_t fota_firmware_download(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args)
 {	
 	int ret;
 	char *server_address1 = NULL;
 	char *server_address2 = NULL;
 
-	if (n_args == 3)
-	{	
-		server_address1 = (char *)mp_obj_str_get_str(args[1]);
-		server_address2 = (char *)mp_obj_str_get_str(args[2]);
-		
-		ret  = Helios_Fota_firmware_download(server_address1, server_address2, mpFotaProgressCB);
-	}
-	else if(n_args == 4)
-	{
-		server_address1 = (char *)mp_obj_str_get_str(args[1]);
-		server_address2 = (char *)mp_obj_str_get_str(args[2]);
-		fota_callback = args[3];
+    enum {
+        ARG_url1,
+		ARG_url2,	
+        ARG_callback,
+    };
+    static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_url1,         MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} },
+        { MP_QSTR_url2,         MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} },
+        { MP_QSTR_callback,     MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_none} },
+    };
 
-		ret  = Helios_Fota_firmware_download(server_address1, server_address2, mpFotaProgressCB);
-	}
-	else
-	{
-		MOD_FOTA_LOG("*** input param invalid ***\r\n");
-		return mp_obj_new_int(-1);
-	}
+    mp_arg_val_t args_parse[MP_ARRAY_SIZE(allowed_args)];
+    mp_arg_parse_all(n_args-1, args+1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args_parse);
+
+    if (args_parse[ARG_url1].u_obj != mp_const_none) {
+        server_address1 = (char *)(mp_obj_str_get_str(args_parse[ARG_url1].u_obj));
+    }
+
+    if (args_parse[ARG_url2].u_obj != mp_const_none) {
+        server_address2 = (char *)(mp_obj_str_get_str(args_parse[ARG_url2].u_obj));
+    }
+
+    if (args_parse[ARG_callback].u_obj != mp_const_none) {
+        fota_callback = args_parse[ARG_callback].u_obj;
+    }
+
+	ret  = Helios_Fota_firmware_download(server_address1, server_address2, mpFotaProgressCB);
 	
 	if(ret)
 	{
@@ -197,7 +205,8 @@ STATIC mp_obj_t fota_firmware_download(size_t n_args, const mp_obj_t *args)
 
 	return mp_obj_new_int(0);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(fota_firmware_download_obj, 2, 5, fota_firmware_download);
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(fota_firmware_download_obj, 1, fota_firmware_download);
 
 
 

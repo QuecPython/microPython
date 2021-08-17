@@ -89,7 +89,14 @@
 // *FORMAT-ON*
 
 #if MICROPY_NLR_SETJMP
+
+#if defined(PLAT_RDA)
+typedef	int jmp_buf[22];
+extern int setjmp(jmp_buf environment);
+extern void longjmp(jmp_buf environment, int value) __attribute__ ((__noreturn__));
+#else
 #include <setjmp.h>
+#endif
 #endif
 
 typedef struct _nlr_buf_t nlr_buf_t;

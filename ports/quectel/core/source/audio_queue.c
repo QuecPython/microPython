@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include "helios_os.h"
 #include "audio_queue.h"
-#include "qpy_audio.h"
+#include "helios_audio.h"
+#include "helios_debug.h"
+#define HELIOS_AUDIO_QUEUE_LOG(fmt, ...) custom_log(audio_audio, fmt, ##__VA_ARGS__)
 
 AUDIO_T audio = {0};
 
-extern int qpy_audio_playFileStart(char *file_name, QPY_AUD_PLAYER_TYPE type,qpy_cb_on_player usr_cb);
-extern int qpy_audio_playFileStop();
-extern int audio_play_callback(char *p_data, int len, QPY_AUD_PLAYER_STATE state);
+extern int audio_play_callback(char *ptr, size_t lens, Helios_EnumAudPlayerState state);
 
 
 /*=============================================================================*/
@@ -116,7 +116,7 @@ int audio_queue_is_full(AUDIO_QUEUE_T *Q)
 				2020/10/16  Jayceon.Fu	Added support for audio file playing 
  */
 /*=============================================================================*/
-void ql_audio_play_queue(void)
+void helios_audio_play_queue(void)
 {
 	int i = 0, ret = 0;
 	
@@ -124,31 +124,39 @@ void ql_audio_play_queue(void)
 	{
 		if (!audio_queue_is_empty(&audio.audio_queue[i]))
 		{
-			ql_rtos_mutex_lock(audio.queue_mutex, QL_WAIT_FOREVER);
+			Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 			uint8_t front = (audio.audio_queue[i].front + 1) % QUEUE_SIZE;
 			uint8_t audio_type = audio.audio_queue[i].audio_data[front].audio_type;
-			//int   mode = audio.audio_queue[i].audio_data[front].mode;
-			//char *data = audio.audio_queue[i].audio_data[front].data;
+			int   mode = audio.audio_queue[i].audio_data[front].mode;
+			char *data = audio.audio_queue[i].audio_data[front].data;
 			audio.cur_priority = audio.audio_queue[i].audio_data[front].priority;
 			audio.cur_breakin  = audio.audio_queue[i].audio_data[front].breakin;
 			audio.cur_type     = audio.audio_queue[i].audio_data[front].audio_type;
 			audio.audio_queue[i].front = front;
-			ql_rtos_mutex_unlock(audio.queue_mutex);
-		
+			audio.total_nums--;
+			uint8_t nums = audio.total_nums;
+			audio.audio_state = AUDIO_PLAYING;
+			Helios_Mutex_Unlock(audio.queue_mutex);
+			
+			HELIOS_AUDIO_QUEUE_LOG("total nums : %d, data : %s\r\n", nums, data);
+			
 			if (audio_type == AUDIO_TTS)
 			{
-				//ret = ql_tts_play(mode, audio.audio_queue[i].audio_data[front].data);
+			#if defined(PLAT_ASR)
+				ret = Helios_TTS_Start(mode, data, strlen(data));
+			#endif
 			}
 			else if (audio_type == AUDIO_FILE)
 			{
-				//ret = ql_audio_file_play(audio.audio_queue[i].audio_data[front].data);
-				QPY_AUD_PLAYER_TYPE type = 1;
-				ret = qpy_audio_playFileStart(audio.audio_queue[i].audio_data[front].data, type, audio_play_callback);
+				ret = Helios_Audio_FilePlayStart(data, HELIOS_AUDIO_PLAY_TYPE_LOCAL, audio_play_callback);
+				HELIOS_AUDIO_QUEUE_LOG("Helios_Audio_FilePlayStart, ret = %d\r\n", ret);
 			}
 
 			if (ret == -1)
 			{
+				Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 				audio.audio_state = AUDIO_IDLE;
+				Helios_Mutex_Unlock(audio.queue_mutex);
 				i=QUEUE_NUMS;
 				continue;
 			}
@@ -164,5 +172,38 @@ void ql_audio_play_queue(void)
 	}
 }
 
+void helios_audio_queue_play_task(void *argv)
+{
+	HELIOS_AUDIO_QUEUE_LOG("helios_audio_queue_play_task start...\r\n");
+	uint8_t audio_msg = 0;
+	int ret = 0;
+	while (1)
+	{
+		HELIOS_AUDIO_QUEUE_LOG("wait audio play msg...\r\n");
+		ret = Helios_MsgQ_Get(audio.queue_msg, (void *)&audio_msg, sizeof(uint8_t), HELIOS_WAIT_FOREVER);
+		HELIOS_AUDIO_QUEUE_LOG("wait msg ok, msg=%d...\r\n", audio_msg);
+		if (ret == 0)
+		{
+			switch (audio_msg)
+			{
+				case AUDIO_START_EVENT:
+					break;
+				case AUDIO_STOP_EVENT:
+					#if defined(PLAT_ASR)
+					Helios_TTS_Stop();
+					#endif
+					Helios_Audio_FilePlayStop(); 
+					helios_audio_play_queue();
+					break;
+				case AUDIO_FINISH_EVENT:
+					HELIOS_AUDIO_QUEUE_LOG("start queue paly...\r\n");
+					helios_audio_play_queue();
+					break;
+				default:
+					break;
+			}
+		}
+	}
+}
 
 

@@ -9,6 +9,38 @@
 
 #include <inttypes.h>
 
+//forrest.liu@20210609 add for lfs use in kernel
+
+struct lfs1_operation lfs1_ops = {	
+	NULL,
+	{0},
+	lfs1_mkdir,
+	lfs1_dir_open,
+	lfs1_dir_close,
+	lfs1_dir_read,
+	lfs1_dir_seek,
+	lfs1_dir_tell,
+	lfs1_dir_rewind,
+	lfs1_file_opencfg,
+	lfs1_file_open,
+	lfs1_file_close,
+	lfs1_file_sync,
+	lfs1_file_read,
+	lfs1_file_write,
+	lfs1_file_seek,
+	lfs1_file_truncate,
+	lfs1_file_tell,
+	lfs1_file_rewind,
+	lfs1_file_size,
+	lfs1_stat,
+	lfs1_remove,
+	lfs1_rename,
+	lfs1_traverse,
+	lfs1_format,
+	lfs1_mount,
+	lfs1_unmount,
+};
+
 
 /// Caching block device operations ///
 static int lfs1_cache_read(lfs1_t *lfs1, lfs1_cache_t *rcache,

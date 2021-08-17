@@ -20,8 +20,9 @@
 #include "helios_debug.h"
 #include "helios_nw.h"
 #include "helios_dev.h"
+#if !defined(PLAT_RDA)
 #include "helios_sim.h"
-
+#endif
 
 #define QPY_NET_LOG(msg, ...)      custom_log(modnet, msg, ##__VA_ARGS__)
 
@@ -108,8 +109,9 @@ STATIC mp_obj_t qpy_net_get_csq(void)
 {
 	int ret = 0;
 	int csq = -1;
+	
+#if !defined(PLAT_RDA)
 	Helios_SIM_Status_e status = 0;
-
 	ret = Helios_SIM_GetCardStatus(0, &status);
 	if (ret == 0)
 	{
@@ -122,7 +124,7 @@ STATIC mp_obj_t qpy_net_get_csq(void)
 	{
 		return mp_obj_new_int(-1);
 	}
-
+#endif
 	csq = Helios_Nw_GetCSQ(0);
 	if(csq != -1)
 	{
@@ -180,6 +182,22 @@ STATIC mp_obj_t qpy_net_get_operator_name(void)
 {
 	int ret = 0; 
 	Helios_NwOperatorInfoStruct info = {0};
+	Helios_NwRegisterStatusInfoStruct reg_info = {0};
+	
+	ret = Helios_Nw_GetRegisterStatus(0, &reg_info);
+	if (ret == 0)
+	{
+		if ((reg_info.data_reg.status != 1) && (reg_info.data_reg.status != 5))
+		{
+			QPY_NET_LOG("nw is not registered\r\n");
+			return mp_obj_new_int(-1);
+		}
+	}
+	else
+	{
+		QPY_NET_LOG("get nw register status failed.\r\n");
+		return mp_obj_new_int(-1);
+	}
 	
 	ret = Helios_Nw_GetOperatorName(0, &info);
 	if (ret == 0)

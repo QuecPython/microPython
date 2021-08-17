@@ -49,7 +49,9 @@
 #include "helios_debug.h"
 
 #define QPY_MPUSSL_LOG(msg, ...)      custom_log(Ussl, msg, ##__VA_ARGS__)
+
 extern void mbedtls_strerror( int ret, char *buf, size_t buflen );
+
 
 typedef struct _mp_obj_ssl_socket_t {
     mp_obj_base_t base;
@@ -159,7 +161,6 @@ STATIC int _mbedtls_ssl_recv(void *ctx, byte *buf, size_t len) {
 STATIC mp_obj_ssl_socket_t *socket_new(mp_obj_t sock, struct ssl_args *args) {
     // Verify the socket object has the full stream protocol
     mp_get_stream_raise(sock, MP_STREAM_OP_READ | MP_STREAM_OP_WRITE | MP_STREAM_OP_IOCTL);
-
     #if MICROPY_PY_USSL_FINALISER
     mp_obj_ssl_socket_t *o = m_new_obj_with_finaliser(mp_obj_ssl_socket_t);
     #else
@@ -309,7 +310,7 @@ STATIC mp_uint_t socket_read(mp_obj_t o_in, void *buf, mp_uint_t size, int *errc
         // renegotation.
         ret = MP_EWOULDBLOCK;
     }
-    *errcode = ret;
+    *errcode = -ret;
     return MP_STREAM_ERROR;
 }
 
@@ -342,6 +343,18 @@ STATIC mp_obj_t socket_setblocking(mp_obj_t self_in, mp_obj_t flag_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(socket_setblocking_obj, socket_setblocking);
 
+
+extern int lwip_getTcpState(int nSocket);
+extern int socket_obj_t_get_fd(mp_obj_t sock);
+STATIC mp_obj_t socket_getstate(const mp_obj_t self_in) 
+{
+	mp_obj_ssl_socket_t *self = MP_OBJ_TO_PTR(self_in);
+	int32_t tcpstate = (int32_t)lwip_getTcpState(socket_obj_t_get_fd(self->sock));
+	return mp_obj_new_int(tcpstate);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_getstate_obj, socket_getstate);
+
+
 STATIC mp_uint_t socket_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
     mp_obj_ssl_socket_t *self = MP_OBJ_TO_PTR(o_in);
     if (request == MP_STREAM_CLOSE) {
@@ -364,6 +377,7 @@ STATIC const mp_rom_map_elem_t ussl_socket_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&mp_stream_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_setblocking), MP_ROM_PTR(&socket_setblocking_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&mp_stream_close_obj) },
+    { MP_ROM_QSTR(MP_QSTR_getsocketsta), MP_ROM_PTR(&socket_getstate_obj) },
     #if MICROPY_PY_USSL_FINALISER
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mp_stream_close_obj) },
     #endif
@@ -401,7 +415,6 @@ STATIC mp_obj_t mod_ssl_wrap_socket(size_t n_args, const mp_obj_t *pos_args, mp_
 
     // TODO: Check that sock implements stream protocol
     mp_obj_t sock = pos_args[0];
-
     struct ssl_args args;
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args,
         MP_ARRAY_SIZE(allowed_args), allowed_args, (mp_arg_val_t *)&args);

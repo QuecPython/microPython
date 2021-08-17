@@ -33,6 +33,7 @@ typedef struct _machine_rtc_obj_t {
     mp_obj_base_t base;
 } machine_rtc_obj_t;
 
+static mp_obj_t callback_cur = NULL;
 
 
 // singleton RTC object
@@ -114,6 +115,58 @@ STATIC mp_obj_t machine_rtc_datetime(mp_uint_t n_args, const mp_obj_t *args) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_rtc_datetime_obj, 1, 2, (mp_obj_t)machine_rtc_datetime);
 
 
+STATIC mp_obj_t  machine_rtc_set_alarm(mp_obj_t self_in, mp_obj_t time)
+{
+	Helios_RTCTime tm = {0};
+	mp_obj_t *items;
+	
+    mp_obj_get_array_fixed_n(time, 8, &items);
+	tm.tm_year = mp_obj_get_int(items[0]);
+	tm.tm_mon = mp_obj_get_int(items[1]);
+	tm.tm_mday = mp_obj_get_int(items[2]);
+	tm.tm_hour = mp_obj_get_int(items[4]);
+	tm.tm_min = mp_obj_get_int(items[5]);
+	tm.tm_sec = mp_obj_get_int(items[6]);
+	
+	int ret = Helios_RTC_Set_Alarm(&tm);
+	
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_rtc_set_alarm_obj, machine_rtc_set_alarm);
+
+
+STATIC mp_obj_t  machine_rtc_enable_alarm(mp_obj_t self_in, mp_obj_t enable)
+{
+	int on_off = mp_obj_get_int(enable);
+	
+	int ret = Helios_RTC_Enable_Alarm((unsigned char)on_off);
+	
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_rtc_enable_alarm_obj, machine_rtc_enable_alarm);
+
+void rtc_callback_to_python(void)
+{
+	if(callback_cur == NULL) {
+		return;
+	}
+	
+    if(mp_obj_is_callable(callback_cur)){
+    	mp_sched_schedule(callback_cur, NULL);
+	}
+}
+
+STATIC mp_obj_t  machine_rtc_register_callback(mp_obj_t self_in, mp_obj_t callback)
+{
+	callback_cur = callback;
+
+	int ret = Helios_RTC_Register_cb(rtc_callback_to_python);
+	
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_rtc_register_callback_obj, machine_rtc_register_callback);
+
+
 STATIC mp_obj_t machine_rtc_init(mp_obj_t self_in, mp_obj_t date) {
     mp_obj_t args[2] = {self_in, date};
     machine_rtc_datetime_helper(2, args);
@@ -125,6 +178,9 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_rtc_init_obj, machine_rtc_init);
 STATIC const mp_rom_map_elem_t machine_rtc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&machine_rtc_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_datetime), MP_ROM_PTR(&machine_rtc_datetime_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_alarm), MP_ROM_PTR(&machine_rtc_set_alarm_obj) },
+    { MP_ROM_QSTR(MP_QSTR_enable_alarm), MP_ROM_PTR(&machine_rtc_enable_alarm_obj) },
+    { MP_ROM_QSTR(MP_QSTR_register_callback), MP_ROM_PTR(&machine_rtc_register_callback_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(machine_rtc_locals_dict, machine_rtc_locals_dict_table);
 

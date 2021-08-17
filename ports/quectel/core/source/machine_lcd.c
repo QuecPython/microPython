@@ -37,6 +37,17 @@
 
 #include "helios_lcd.h"
 #include "helios_fs.h"
+
+#ifdef CONFIG_JPEG  
+#include "jpeglib.h"
+#include "jpeg_operation.h"
+#endif
+
+#include "helios_debug.h"
+
+#define LCD_LOG(msg, ...)      custom_log("lcd", msg, ##__VA_ARGS__)
+
+
 #if 1
 
 //******************invaild data predefine*******************//
@@ -444,6 +455,48 @@ STATIC mp_obj_t machine_lcd_show_data(size_t n_args, const mp_obj_t *args)
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_lcd_show_obj, 4, 6, machine_lcd_show_data);
 
 
+#ifdef CONFIG_JPEG
+STATIC mp_obj_t machine_lcd_show_jpeg(size_t n_args, const mp_obj_t *args)
+{
+	
+	int ret = 0;
+	int start_x = 0;
+	int start_y = 0;
+	int end_x = 0;
+	int end_y = 0;
+
+	start_x = mp_obj_get_int(args[2]);
+	start_y = mp_obj_get_int(args[3]);
+
+	//machine_lcd_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+	char *file_name = (char*)mp_obj_str_get_str(args[1]);
+	
+	char name[256] = {0};
+	sprintf(name, "U:/%s",file_name);
+
+	rgb_struct lcd_data = {0};
+
+	ret = JPEG2RGB565(name,&lcd_data);
+
+	LCD_LOG("JPEG2RGB565 ret = %d\n",ret);
+
+	if(ret != 0) return mp_obj_new_int(ret);
+
+	end_x = start_x + lcd_data.width-1;
+	end_y = start_y + lcd_data.height -1;
+	
+	ret = Helios_LCD_Write(lcd_data.buf, start_x, start_y, end_x, end_y);
+
+	if(lcd_data.buf) {
+		free(lcd_data.buf);
+	}
+	
+    return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_lcd_show_jpeg_obj, 4, 4, machine_lcd_show_jpeg);
+#endif
+
+
 STATIC const mp_rom_map_elem_t lcd_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_lcd_init), MP_ROM_PTR(&machine_lcd_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_lcd_clear), MP_ROM_PTR(&machine_lcd_clear_obj) },
@@ -454,6 +507,9 @@ STATIC const mp_rom_map_elem_t lcd_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_lcd_display_off), MP_ROM_PTR(&machine_lcd_display_off_obj) },
     { MP_ROM_QSTR(MP_QSTR_lcd_write_cmd), MP_ROM_PTR(&machine_lcd_write_cmd_obj) },
     { MP_ROM_QSTR(MP_QSTR_lcd_write_data), MP_ROM_PTR(&machine_lcd_write_data_obj) },
+#ifdef CONFIG_JPEG
+    { MP_ROM_QSTR(MP_QSTR_lcd_show_jpg), MP_ROM_PTR(&machine_lcd_show_jpeg_obj) },
+#endif
 
 };
 

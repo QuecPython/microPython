@@ -87,6 +87,11 @@
 #define MICROPY_PY_UTIME_MP_HAL     		(1)
 #define MICROPY_VFS                 		(1)
 #define MICROPY_VFS_LFS1					(1)
+#if CONFIG_SPI_SDCARD//forrest.liu@20210731 add for SPI SD card function
+#define MICROPY_VFS_FAT                     (1)
+#else
+#define MICROPY_VFS_FAT                     (0)
+#endif
 #define MICROPY_PY_IO_FILEIO				(1)
 #define MICROPY_PY_BUILTINS_INPUT   		(1)
 
@@ -110,7 +115,7 @@
 #define MICROPY_ENABLE_SOURCE_LINE  		(1)
 #define MICROPY_PY_USOCKET_EVENTS			(1)
 #define MICROPY_ENABLE_SCHEDULER    		(1)
-#define MICROPY_SCHEDULER_DEPTH     		(8)
+#define MICROPY_SCHEDULER_DEPTH     		(32)
 #define MICROPY_PY_BUILTINS_FILTER			(1)
 #define MICROPY_MODULE_FROZEN_MPY   		(1)
 #define MICROPY_QSTR_EXTRA_POOL     		mp_qstr_frozen_const_pool
@@ -129,6 +134,20 @@
 #define MICROPY_PY_THREAD_GIL       		(1)
 #define MICROPY_PY_THREAD_GIL_VM_DIVISOR    (32)
 
+#if defined(PLAT_RDA)
+#define MICROPY_PY_USSL                     (0) // (1) for original, modified by Chavis for compilation on 1/7/2021
+#define MICROPY_SSL_MBEDTLS                 (0) // (1) for original, modified by Chavis for compilation on 1/7/2021
+
+#define MICROPY_PY_UHASHLIB 				(0)
+#define MICROPY_PY_UHASHLIB_SHA256 			(0)
+#define MICROPY_PY_UHASHLIB_SHA1  			(0)
+#define MICROPY_PY_UHASHLIB_MD5 			(0)
+//#define MBEDTLS_VERSION_NUMBER         0x02160000								   
+#define MICROPY_PY_UCRYPTOLIB 				(0)
+#define MICROPY_PY_UCRYPTOLIB_CTR 			(0)
+#define MICROPY_PY_UCRYPTOLIB_CONSTS 		(0)	
+
+#else
 
 #define MICROPY_PY_USSL                     (1) // (1) for original, modified by Chavis for compilation on 1/7/2021
 #define MICROPY_SSL_MBEDTLS                 (1) // (1) for original, modified by Chavis for compilation on 1/7/2021
@@ -141,6 +160,7 @@
 #define MICROPY_PY_UCRYPTOLIB 				(1)
 #define MICROPY_PY_UCRYPTOLIB_CTR 			(1)
 #define MICROPY_PY_UCRYPTOLIB_CONSTS 		(1)	
+#endif
 
 #define MICROPY_PY_COLLECTIONS_DEQUE        (1)							   
 //#define MICROPY_CAN_OVERRIDE_BUILTINS       (1)
@@ -194,33 +214,48 @@ typedef long mp_off_t;
 #define mp_type_fileio                      mp_type_vfs_lfs1_fileio
 #define mp_type_textio                      mp_type_vfs_lfs1_textio
 
-
-extern const struct _mp_obj_module_t mp_module_machine;
-extern const struct _mp_obj_module_t mp_module_usocket;
-extern const struct _mp_obj_module_t example_module;
-extern const struct _mp_obj_module_t utime_module;
-extern const struct _mp_obj_module_t uos_module;
-// extern const struct _mp_obj_module_t mp_module_queclib;
-extern const struct _mp_obj_module_t mp_module_dial;
-extern const struct _mp_obj_module_t mp_module_sim;
-extern const struct _mp_obj_module_t mp_module_celllocator;
 extern const struct _mp_obj_module_t mp_module_modem;
+extern const struct _mp_obj_module_t uos_module;
+extern const struct _mp_obj_module_t example_module;
+extern const struct _mp_obj_module_t mp_module_hmacSha1;
+extern const struct _mp_obj_module_t mp_module_utils;
+extern const struct _mp_obj_type_t mp_ostimer_type;
+extern const struct _mp_obj_module_t mp_module_machine;
+extern const struct _mp_obj_module_t utime_module;
+extern const struct _mp_obj_module_t mp_module_usocket;
+extern const struct _mp_obj_module_t mp_module_net;
+extern const struct _mp_obj_module_t mp_module_dial;
+extern const struct _mp_obj_module_t mp_module_misc;
+extern const struct _mp_obj_module_t mp_module_quecgnss;
+extern const struct _mp_obj_module_t mp_module_sim;
+
+#if !defined(PLAT_RDA)
+//extern const struct _mp_obj_module_t mp_module_machine;
+//extern const struct _mp_obj_module_t mp_module_usocket;
+//extern const struct _mp_obj_module_t example_module;
+//extern const struct _mp_obj_module_t utime_module;
+//extern const struct _mp_obj_module_t uos_module;
+// extern const struct _mp_obj_module_t mp_module_queclib;
+//extern const struct _mp_obj_module_t mp_module_dial;
+//extern const struct _mp_obj_module_t mp_module_sim;
+extern const struct _mp_obj_module_t mp_module_celllocator;
+//extern const struct _mp_obj_module_t mp_module_modem;
 extern const struct _mp_obj_module_t mp_module_audio;
 // Pawn EditStart -2020.08.18
-extern const struct _mp_obj_module_t mp_module_misc;
-extern const struct _mp_obj_module_t mp_module_net;
-extern const struct _mp_obj_module_t mp_module_hmacSha1;
+//extern const struct _mp_obj_module_t mp_module_misc;
+//extern const struct _mp_obj_module_t mp_module_net;
+//extern const struct _mp_obj_module_t mp_module_hmacSha1;
 extern const struct _mp_obj_module_t mp_module_pm;
 // end
-extern const struct _mp_obj_type_t mp_ostimer_type;
+//extern const struct _mp_obj_type_t mp_ostimer_type;
 extern const struct _mp_obj_module_t mp_module_sms;
-extern const struct _mp_obj_module_t mp_module_utils;
-extern const struct _mp_obj_module_t mp_module_hmacSha1;
+//extern const struct _mp_obj_module_t mp_module_utils;
 extern const struct _mp_obj_module_t mp_module_audio;
 extern const struct _mp_obj_module_t mp_module_wifiscan;
 
 //#define MICROPY_PORT_BUILTIN_MODULES
 extern const struct _mp_obj_module_t mp_module_bma250;
+#endif
 
 #if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 extern const struct _mp_obj_type_t mp_fota_type;
@@ -234,6 +269,13 @@ extern const struct _mp_obj_module_t mp_module_lvgl;
 #define MICROPY_PORT_BUILTIN_MODULES_LVGL { MP_OBJ_NEW_QSTR(MP_QSTR_lvgl), (mp_obj_t)&mp_module_lvgl},
 #else
 #define MICROPY_PORT_BUILTIN_MODULES_LVGL
+#endif
+
+#ifdef CONFIG_QUECTHING
+extern const struct _mp_obj_module_t mp_module_quecIot;
+#define MICROPY_PORT_BUILTIN_MODULES_QUECTHING { MP_OBJ_NEW_QSTR(MP_QSTR_quecIot), (mp_obj_t)&mp_module_quecIot},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_QUECTHING 
 #endif
 
 #ifdef CONFIG_CAMERA
@@ -257,7 +299,50 @@ extern const struct _mp_obj_module_t mp_module_sensor;
 #define MICROPY_PORT_BUILTIN_MODULES_SENSOR
 #endif
 
+#if defined(PLAT_Unisoc)
+extern const struct _mp_obj_module_t mp_module_quecgnss;
+#define MICROPY_PORT_BUILTIN_MODULES_GNSS { MP_OBJ_NEW_QSTR(MP_QSTR_quecgnss), (mp_obj_t)&mp_module_quecgnss},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_GNSS
+#endif
 
+#if defined(CONFIG_RTMP)
+extern const struct _mp_obj_module_t mp_module_rtmp;
+#define MICROPY_PORT_BUILTIN_MODULES_RTMP { MP_OBJ_NEW_QSTR(MP_QSTR_librtmp), (mp_obj_t)&mp_module_rtmp},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_RTMP
+#endif
+
+#if defined(BOARD_EC600SCN_LA_VOLTE) || defined(BOARD_EC600NCN_LC_VOLTE) || defined(EC200UCN_AA) || defined(EC200UCN_AB)
+extern const struct _mp_obj_module_t mp_module_voicecall;
+#define MICROPY_PORT_BUILTIN_MODULES_VOICECALL { MP_OBJ_NEW_QSTR(MP_QSTR_voiceCall), (mp_obj_t)&mp_module_voicecall},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_VOICECALL
+#endif
+
+#if defined(PLAT_ASR)
+extern const struct _mp_obj_module_t module_SecureData;
+#define MICROPY_PORT_BUILTIN_MODULES_SECUREDATA { MP_OBJ_NEW_QSTR(MP_QSTR_SecureData), (mp_obj_t)&module_SecureData},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_SECUREDATA
+#endif
+
+#if defined(PLAT_RDA)
+#define MICROPY_PORT_BUILTIN_MODULES \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_modem), (mp_obj_t)&mp_module_modem}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_uos), (mp_obj_t)&uos_module }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_example), (mp_obj_t)&example_module }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_utils), (mp_obj_t)&mp_module_utils},\
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_hmacSha1), (mp_obj_t)&mp_module_hmacSha1},\
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_osTimer), (mp_obj_t)&mp_ostimer_type}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_machine), (mp_obj_t)&mp_module_machine }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_utime), (mp_obj_t)&utime_module }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_usocket), (mp_obj_t)&mp_module_usocket }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_net), (mp_obj_t)&mp_module_net}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_misc), (mp_obj_t)&mp_module_misc}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_sim), (mp_obj_t)&mp_module_sim}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_dial), (mp_obj_t)&mp_module_dial},
+#else
 #define MICROPY_PORT_BUILTIN_MODULES \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_uos), (mp_obj_t)&uos_module }, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_machine), (mp_obj_t)&mp_module_machine }, \
@@ -271,6 +356,8 @@ extern const struct _mp_obj_module_t mp_module_sensor;
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_utils), (mp_obj_t)&mp_module_utils},\
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_hmacSha1), (mp_obj_t)&mp_module_hmacSha1}, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_sms), (mp_obj_t)&mp_module_sms}, \
+		MICROPY_PORT_BUILTIN_MODULES_VOICECALL \
+		MICROPY_PORT_BUILTIN_MODULES_SECUREDATA \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_sim), (mp_obj_t)&mp_module_sim}, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_pm), (mp_obj_t)&mp_module_pm}, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_net), (mp_obj_t)&mp_module_net}, \
@@ -281,8 +368,11 @@ extern const struct _mp_obj_module_t mp_module_sensor;
 		MICROPY_PORT_BUILTIN_MODULES_LVGL \
 		MICROPY_PORT_BUILTIN_MODULES_CAMERA \
 		MICROPY_PORT_BUILTIN_MODULES_BLE \
-		MICROPY_PORT_BUILTIN_MODULES_SENSOR
-
+		MICROPY_PORT_BUILTIN_MODULES_QUECTHING \
+		MICROPY_PORT_BUILTIN_MODULES_SENSOR \
+		MICROPY_PORT_BUILTIN_MODULES_GNSS \
+		MICROPY_PORT_BUILTIN_MODULES_RTMP
+#endif
 
 	// use vfs's functions for import stat and builtin open
 #define mp_import_stat mp_vfs_import_stat

@@ -34,13 +34,19 @@
 #include "readline.h"
 #include "mpprint.h"
 
+#if !defined(PLAT_RDA)
 #if CONFIG_MBEDTLS
 #include "mbedtls_init.h"
 #endif
+#endif
 
-int ql_micropython_task_ref;
+Helios_Thread_t ql_micropython_task_ref;
 
+#if defined(PLAT_RDA)
+#define MP_TASK_STACK_SIZE      (32 * 1024)
+#else
 #define MP_TASK_STACK_SIZE      (64 * 1024)
+#endif
 #define MP_TASK_STACK_LEN       (MP_TASK_STACK_SIZE/sizeof(uint32_t))
 
 
@@ -108,12 +114,22 @@ void quecpython_task(void *arg)
 	void *stack_ptr = NULL;
 	int stack_dummy;
 
+#if !defined(PLAT_RDA)
+    //Added by Freddy @20210520 在线程sleep时，通过wait queue的方式超时代替实际的sleep，
+    //当有callback执行时，给此queue发消息即可快速执行callback
+    void quecpython_callback_deal_queue_create(void);
+    quecpython_callback_deal_queue_create();
+#endif
+
+#if !defined(PLAT_RDA)
 #if CONFIG_MBEDTLS
     mbedtls_platform_setup(NULL);
+#endif
 #endif
 
 	#if MICROPY_PY_THREAD
     id = Helios_Thread_GetID();
+    ql_micropython_task_ref = id;
     stack_ptr = Helios_Thread_GetStaskPtr(id);
 	mp_thread_init(stack_ptr, MP_TASK_STACK_LEN);
 	//uart_printf("===========id: 0x%4X, stack_ptr: 0x%08X==========\r\n", id, stack_ptr);
@@ -145,7 +161,11 @@ soft_reset:
     readline_init0();
     
 	// run boot-up scripts
+#if defined(PLAT_RDA)
+    pyexec_frozen_module("_boot_RDA.py");
+#else
     pyexec_frozen_module("_boot.py");
+#endif
     if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL) {
         pyexec_file_if_exists("/usr/main.py");
     }
@@ -169,7 +189,9 @@ soft_reset:
 
     mp_hal_stdout_tx_str("MPY: soft reboot\r\n");
 	mp_deinit();
+#if !defined(PLAT_RDA)
     fflush(stdout);
+#endif
     goto soft_reset;
 }
 /* void gc_collect(void) {

@@ -28,7 +28,9 @@
 #include <stdio.h>
 
 #include "py/runtime.h"
-
+#if !defined(PLAT_RDA)
+#include "mphalport.h"
+#endif
 #if MICROPY_KBD_EXCEPTION
 // This function may be called asynchronously at any time so only do the bare minimum.
 void MICROPY_WRAP_MP_KEYBOARD_INTERRUPT(mp_keyboard_interrupt)(void) {
@@ -121,6 +123,7 @@ void mp_sched_unlock(void) {
     MICROPY_END_ATOMIC_SECTION(atomic_state);
 }
 
+extern void mp_hal_stdin_send_msg_to_rx_chr(void);
 bool MICROPY_WRAP_MP_SCHED_SCHEDULE(mp_sched_schedule)(mp_obj_t function, mp_obj_t arg) {
     mp_uint_t atomic_state = MICROPY_BEGIN_ATOMIC_SECTION();
     bool ret;
@@ -137,6 +140,16 @@ bool MICROPY_WRAP_MP_SCHED_SCHEDULE(mp_sched_schedule)(mp_obj_t function, mp_obj
         ret = false;
     }
     MICROPY_END_ATOMIC_SECTION(atomic_state);
+#if !defined(PLAT_RDA)
+    if(true == ret) {
+    	quecpython_send_msg_to_sleep_func();
+    	mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
+    }
+#else 
+    if(true == ret) {
+    	mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
+    }
+#endif
     return ret;
 }
 

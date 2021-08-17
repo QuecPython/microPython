@@ -19,6 +19,10 @@
 
 #include "helios_os.h"
 
+#define MP_THREAD_MIN_STACK_SIZE                        (32 * 1024)
+#define MP_THREAD_DEFAULT_STACK_SIZE                    (MP_THREAD_MIN_STACK_SIZE + 1024)
+#define MP_THREAD_PRIORITY                              100
+
 typedef Helios_Mutex_t mp_thread_mutex_t;
 
 
@@ -29,7 +33,7 @@ void mp_thread_init(void *stack, uint32_t stack_len);
 void mp_thread_gc_others(void);
 void mp_thread_deinit(void);
 unsigned int mp_get_available_memory_size(void);
-
+bool mp_is_python_thread(void);
 
 #endif // MICROPY_INCLUDED_MPTHREADPORT_H
 

@@ -115,7 +115,7 @@ STATIC mp_obj_t preview_make_new(const mp_obj_type_t *type, size_t n_args, size_
 	camconfig.lcdpreheight = lcdpreheight;
 	camconfig.lcdprewidth = lcdprewidth;
 	camconfig.prebufcnt = prebufcnt;
-
+	camconfig.decbufcnt = 1;
  
     return MP_OBJ_FROM_PTR(self);
 }

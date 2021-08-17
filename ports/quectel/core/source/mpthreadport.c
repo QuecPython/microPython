@@ -26,10 +26,6 @@
 
 #if MICROPY_PY_THREAD
 
-#define MP_THREAD_MIN_STACK_SIZE                        (32 * 1024)
-#define MP_THREAD_DEFAULT_STACK_SIZE                    (MP_THREAD_MIN_STACK_SIZE + 1024)
-#define MP_THREAD_PRIORITY                              100
-
 // this structure forms a linked list, one node per active thread
 typedef struct _thread_t {
     Helios_Thread_t id;     // system id of thread
@@ -127,7 +123,7 @@ STATIC void thread_entry(void *arg) {
 }
 
 
-void mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, int priority, char *name) {
+int mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, int priority, char *name) {
     // store thread entry function into a global variable so we can access it
 	ext_thread_entry = entry;
 	if (*stack_size == 0) {
@@ -144,7 +140,7 @@ void mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, 
     // create thread
     Helios_ThreadAttr ThreadAttr = {
         .name = name,
-        .stack_size = *stack_size,
+        .stack_size = *stack_size / sizeof(uint32_t),
         .priority = priority,
         .entry = thread_entry,
         .argv = arg
@@ -170,11 +166,14 @@ void mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, 
     *stack_size -= 1024;
 
     mp_thread_mutex_unlock(&thread_mutex);
+
+    return (int)thread_id;
 }
 
 //forrest.liu@20210408 increase the priority for that python thread can,t be scheduled 
-void mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
-    mp_thread_create_ex(entry, arg, stack_size, (MP_THREAD_PRIORITY - 1), "mp_thread");
+int mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
+    int thread_id = mp_thread_create_ex(entry, arg, stack_size, (MP_THREAD_PRIORITY - 1), "mp_thread");
+    return thread_id;
 }
 
 void mp_thread_finish(void) {
@@ -188,7 +187,34 @@ void mp_thread_finish(void) {
     mp_thread_mutex_unlock(&thread_mutex);
 }
 
+//按线程id结束线程
+bool mp_thread_finish_by_threadid(int thread_id) {
+    mp_thread_mutex_lock(&thread_mutex, 1);
+    for (thread_t *th = thread; th != NULL; th = th->next) {
+        if (th->id == (Helios_Thread_t)thread_id) {
+            th->ready = 0;
+            mp_thread_mutex_unlock(&thread_mutex);
+            return true;
+            break;
+        }
+    }
+    mp_thread_mutex_unlock(&thread_mutex);
+    return false;
+}
 
+//返回当前线程是否为python的线程
+bool mp_is_python_thread(void) {
+	Helios_Thread_t curr_id = Helios_Thread_GetID(); 
+    mp_thread_mutex_lock(&thread_mutex, 1);
+    for (thread_t *th = thread; th != NULL; th = th->next) {
+        if (th->id == curr_id) {
+        	mp_thread_mutex_unlock(&thread_mutex);
+            return true;
+        }
+    }
+    mp_thread_mutex_unlock(&thread_mutex);
+    return false;
+}
 
 void mp_thread_mutex_init(mp_thread_mutex_t *mutex) {
     *mutex = Helios_Mutex_Create();

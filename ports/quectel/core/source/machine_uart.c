@@ -32,6 +32,8 @@ typedef struct _machine_uart_obj_t {
 
 static mp_obj_t callback_cur[4] = {0};
 
+machine_uart_obj_t uart_self_obj[HELIOS_UARTMAX] = {0};
+
 
 const mp_obj_type_t machine_uart_type;
 STATIC const char *_parity_name[] = {"None", "1", "0"};
@@ -93,6 +95,16 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
     }
 
     // get data bits
+#if defined(PLAT_Unisoc)
+	switch (args[ARG_bits].u_int) {
+        case 8:
+            self->config.data_bit = HELIOS_UART_DATABIT_8;
+            break;
+        default:
+            mp_raise_ValueError("invalid data bits, Unisoc platform only support 8 data bit.");
+            break;
+    }
+#else
     switch (args[ARG_bits].u_int) {
         case 0:
             break;
@@ -112,7 +124,7 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
             mp_raise_ValueError("invalid data bits");
             break;
     }
-
+#endif
 	// get parity bits
     switch (args[ARG_parity].u_int) {
 		case -1:
@@ -168,7 +180,9 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
 	
 	memcpy((void*)&uart_config,(void*)&self->config, sizeof(Helios_UARTConfig));
 	
-	Helios_UART_Init((Helios_UARTNum) self->uart_num, &uart_para);
+	if(Helios_UART_Init((Helios_UARTNum) self->uart_num, &uart_para) != 0) {
+		mp_raise_msg_varg(&mp_type_ValueError, "UART(%d) does not exist", self->uart_num);
+	}
 }
 
 STATIC mp_obj_t machine_uart_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
@@ -181,7 +195,7 @@ STATIC mp_obj_t machine_uart_make_new(const mp_obj_type_t *type, size_t n_args, 
     }
 
     // create instance
-    machine_uart_obj_t *self = m_new_obj(machine_uart_obj_t);
+    machine_uart_obj_t *self = (machine_uart_obj_t*)&uart_self_obj[uart_num];
 	
     self->base.type = &machine_uart_type;
     self->uart_num = uart_num;
@@ -273,10 +287,18 @@ STATIC const mp_rom_map_elem_t machine_uart_locals_dict_table[] = {
    // { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&mp_stream_write_obj) },
   //  { MP_ROM_QSTR(MP_QSTR_sendbreak), MP_ROM_PTR(&machine_uart_sendbreak_obj) },
+	
+#if defined(PLAT_RDA)
+	{ MP_ROM_QSTR(MP_QSTR_UART1), MP_ROM_INT(HELIOS_UART1) },
+#endif
+#if defined (PLAT_ASR)
     { MP_ROM_QSTR(MP_QSTR_UART0), MP_ROM_INT(HELIOS_UART0) },
-    { MP_ROM_QSTR(MP_QSTR_UART1), MP_ROM_INT(HELIOS_UART1) },
+#endif
+#if !defined(PLAT_RDA)
+	{ MP_ROM_QSTR(MP_QSTR_UART1), MP_ROM_INT(HELIOS_UART1) },
     { MP_ROM_QSTR(MP_QSTR_UART2), MP_ROM_INT(HELIOS_UART2) },
     { MP_ROM_QSTR(MP_QSTR_UART3), MP_ROM_INT(HELIOS_UART3) },
+#endif
     //{ MP_ROM_QSTR(MP_QSTR_UART4), MP_ROM_INT(HELIOS_UART4) },
    // { MP_ROM_QSTR(MP_QSTR_UART5), MP_ROM_INT(HELIOS_UART5) },
 };

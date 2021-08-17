@@ -41,6 +41,13 @@ WHEN		WHO			WHAT,WHERE,WHY
 #include "runtime.h"
 #include "helios_camera.h"
 
+#include "zbar.h"
+#include "image.h"
+
+#include "helios_debug.h"
+
+#define SCANDE_LOG(msg, ...)      custom_log("scandecode", msg, ##__VA_ARGS__)
+
 
 
 #define OPEN_PREVIEW_AND_DECODE 1
@@ -51,7 +58,12 @@ static mp_obj_t callback_cur = NULL;
 static Helios_CAMConfig camconfig = {0};
 
 
+static char camera_decode_switch = 0;
 
+typedef enum {
+	DECODE_OPEN,
+	DECODE_CLOSE
+}Camera_decode_switch;
 
 typedef struct _preview_obj_t {
     mp_obj_base_t base;
@@ -66,18 +78,71 @@ typedef struct _preview_obj_t {
 	//int  inited;
 } preview_obj_t;
 
-static void cam_decode_callback(Helios_decode_para* outdata)
-{
-	if(outdata->result != 0 || callback_cur == NULL) {
-		return;
+zbar_image_scanner_t *scanner = NULL;
+
+ void camDecode(unsigned char* raw, int width, int height) {
+ 	if(camera_decode_switch == DECODE_OPEN) {
+		/* create a reader */
+		scanner = zbar_image_scanner_create();
+	
+		/* configure the reader */
+		zbar_image_scanner_set_config(scanner, 0, ZBAR_CFG_ENABLE, 1);
+	
+		/* obtain image data */
+		//int width = 0, height = 0;
+		//void *raw = NULL;
+		//get_data("barcode.png", &width, &height, &raw);
+	
+		/* wrap image data */
+		zbar_image_t *image = zbar_image_create();
+		zbar_image_set_format(image, *(int*)"Y800");
+		zbar_image_set_size(image, width, height);
+		zbar_image_set_data(image, raw, width * height, zbar_image_free_data);
+	
+		/* scan the image for barcodes */
+		int n = zbar_scan_image(scanner, image);
+		if(n == 0) {
+			goto lop;
+		}
+		/* extract results */
+		const zbar_symbol_t *symbol = zbar_image_first_symbol(image);
+		
+		for(; symbol; symbol = zbar_symbol_next(symbol)) {
+			/* do something useful with results */
+			zbar_symbol_type_t typ = zbar_symbol_get_type(symbol);
+			const char *data = zbar_symbol_get_data(symbol);
+			SCANDE_LOG("decoded %s symbol \"%s\"\r\n",
+				   zbar_get_symbol_name(typ), data);
+			
+			/*SCANDE_LOG("len = %d\r\n",strlen(data));
+			for(int k=0; k<strlen(data); k++)
+			{
+				SCANDE_LOG("%X ", (uint8_t)data[k]);
+			}*/
+	
+		   if(callback_cur != NULL) {
+				mp_obj_t decode_cb[2] = {
+				   mp_obj_new_int(0),
+				   mp_obj_new_str((char*)data,strlen((char*)data)),
+				};
+			   if(mp_obj_is_callable(callback_cur)){
+				   mp_sched_schedule(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(2, decode_cb)));
+			   }
+		   }
+			
+		}
+	
+	lop:
+		/* clean up */
+		zbar_image_destroy(image);
+		zbar_image_scanner_destroy(scanner);
 	}
-     mp_obj_t decode_cb[2] = {
-	 	mp_obj_new_int(outdata->result),
-        mp_obj_new_str((char*)outdata->DataBuf,strlen((char*)outdata->DataBuf)),
-     };
-    if(mp_obj_is_callable(callback_cur)){
-    	mp_sched_schedule(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(2, decode_cb)));
-	}
+ 
+ }
+
+
+static void camera_switch(char value) {
+	camera_decode_switch = value;
 }
 
 
@@ -127,7 +192,7 @@ STATIC mp_obj_t scandecode_make_new(const mp_obj_type_t *type, size_t n_args, si
        mp_raise_ValueError("camheight must be (0,640)");
     }
 
-	printf("data camwidth etc = %d,%d,%d,%d,%d\n",camwidth,camheight,lcdprewidth,lcdpreheight,prebufcnt);
+	SCANDE_LOG("data camwidth etc = %d,%d,%d,%d,%d\n",camwidth,camheight,lcdprewidth,lcdpreheight,prebufcnt);
 
 	
     preview_obj_t *self = m_new_obj(preview_obj_t);
@@ -148,6 +213,9 @@ STATIC mp_obj_t scandecode_make_new(const mp_obj_type_t *type, size_t n_args, si
 	camconfig.decbufcnt = decbufcnt;
 	camconfig.preview = 1;
 	camconfig.model = model;
+	camconfig.decode_pro = camDecode;
+
+	camera_switch(DECODE_CLOSE);
 	
 	if(prebufcnt == 0) {
 		camconfig.preview = 0;
@@ -173,6 +241,7 @@ STATIC mp_obj_t camera_close(mp_obj_t self_in)
 {
 
 	int error =  Helios_camera_close();
+	camera_switch(DECODE_CLOSE);
 
 	return mp_obj_new_int(error);
 }
@@ -180,7 +249,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode_close_obj, camera_close);
 
 STATIC mp_obj_t camera_scandecode_start(mp_obj_t self_in)
 {
-
+	camera_switch(DECODE_OPEN);
 	int error =  Helios_camera_scandecode_start();
 
 	return mp_obj_new_int(error);
@@ -189,25 +258,24 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode_start_obj, camera_scandecode_
 
 STATIC mp_obj_t camera_scandecode_pause(mp_obj_t self_in)
 {
+	camera_switch(DECODE_CLOSE);
 
-	int error =  Helios_camera_scandecode_pause();
-
-	return mp_obj_new_int(error);
+	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode_pause_obj, camera_scandecode_pause);
 
 STATIC mp_obj_t camera_scandecode_resume(mp_obj_t self_in)
 {
+	camera_switch(DECODE_OPEN);
 
-	int error =  Helios_camera_scandecode_resume();
-
-	return mp_obj_new_int(error);
+	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode_resume_obj, camera_scandecode_resume);
 
 STATIC mp_obj_t camera_scandecode_stop(mp_obj_t self_in)
 {
-
+	
+	camera_switch(DECODE_CLOSE);
 	int error =  Helios_camera_scandecode_stop();
 
 	return mp_obj_new_int(error);
@@ -221,7 +289,6 @@ STATIC mp_obj_t camera_scandecode_callback(mp_obj_t self_in, mp_obj_t callback)
 	preview_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	self->callback = callback;
 	callback_cur = callback;
-	Helios_camera_scandecode_callback(cam_decode_callback);
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(camera_scandecode_callback_obj, camera_scandecode_callback);

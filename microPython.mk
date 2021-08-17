@@ -17,8 +17,6 @@ $(NAME)_SRCS = \
 	extmod/vfs_blockdev.c \
 	extmod/vfs_lfs.c \
 	extmod/vfs_reader.c \
-	extmod/modussl_mbedtls.c \
-	extmod/mb_ussl_error.c \
 	lib/littlefs/lfs1.c \
 	lib/littlefs/lfs1_util.c \
 	lib/mp-readline/readline.c \
@@ -33,49 +31,30 @@ $(NAME)_SRCS = \
 	ports/quectel/core/source/mphalport.c \
 	ports/quectel/core/source/mpthreadport.c \
 	ports/quectel/core/source/quecpython.c \
-	ports/quectel/core/source/utf8togbk.c \
-	ports/quectel/core/source/moduos.c \
 	ports/quectel/core/source/linklist.c \
-	ports/quectel/core/source/modsocket.c \
-	ports/quectel/core/source/modostimer.c \
-	ports/quectel/core/source/modexample.c \
-	ports/quectel/core/source/moddatacall.c \
 	ports/quectel/core/source/moddev.c \
-	ports/quectel/core/source/modutime.c \
+	ports/quectel/core/source/moduos.c \
+	ports/quectel/core/source/modexample.c \
+	ports/quectel/core/source/modsha1.c \
 	ports/quectel/core/source/modutils.c \
 	ports/quectel/core/source/utils_crc32.c \
-	ports/quectel/core/source/modsha1.c \
-	ports/quectel/core/source/modnet.c \
-	ports/quectel/core/source/modsim.c \
-	ports/quectel/core/source/modsms.c \
+	ports/quectel/core/source/modostimer.c \
 	ports/quectel/core/source/modmachine.c \
-	ports/quectel/core/source/machine_extint.c \
-	ports/quectel/core/source/machine_hw_spi.c \
-	ports/quectel/core/source/machine_iic.c \
 	ports/quectel/core/source/machine_pin.c \
-	ports/quectel/core/source/machine_rtc.c \
-	ports/quectel/core/source/machine_lcd.c \
 	ports/quectel/core/source/machine_timer.c \
-	ports/quectel/core/source/machine_uart.c \
-	ports/quectel/core/source/machine_wdt.c \
-	ports/quectel/core/source/misc_adc.c \
-	ports/quectel/core/source/misc_power.c \
-	ports/quectel/core/source/misc_pwm.c \
-	ports/quectel/core/source/modmisc.c \
-	ports/quectel/core/source/modlpm.c \
-	ports/quectel/core/source/modcelllocator.c \
-	ports/quectel/core/source/modwifiscan.c \
-	ports/quectel/core/source/modble.c \
-	ports/quectel/core/source/sensor_sn95500.c \
-	ports/quectel/core/source/modsensor.c \
+	ports/quectel/core/source/machine_rtc.c \
+	ports/quectel/core/source/modsocket.c \
+	ports/quectel/core/source/modnet.c \
+	ports/quectel/core/source/moddatacall.c \
 	ports/quectel/core/build/_frozen_mpy.c \
-	ports/quectel/core/source/modaudio.c \
-	ports/quectel/core/source/audio_audio.c \
-	ports/quectel/core/source/audio_tts.c \
-	ports/quectel/core/source/audio_record.c \
-	ports/quectel/core/source/misc_usb.c \
+	ports/quectel/core/source/modutime.c \
+	ports/quectel/core/source/modmisc.c \
+	ports/quectel/core/source/misc_power.c \
 	ports/quectel/core/source/misc_powerkey.c \
-	ports/quectel/core/source/modfota.c \
+    ports/quectel/core/source/misc_pwm.c \
+    ports/quectel/core/source/misc_adc.c \
+	ports/quectel/core/source/modsim.c \
+    ports/quectel/core/source/misc_usb.c \
 	py/argcheck.c \
 	py/asmarm.c \
 	py/asmbase.c \
@@ -194,6 +173,45 @@ $(NAME)_SRCS = \
 	py/vstr.c \
 	py/warning.c
 
+
+ifneq ($(strip $(PLAT)),RDA)
+$(NAME)_SRCS += \
+	extmod/modussl_mbedtls.c \
+	extmod/mb_ussl_error.c \
+	ports/quectel/core/source/utf8togbk.c \
+	ports/quectel/core/source/modsms.c \
+	ports/quectel/core/source/modvoicecall.c \
+	ports/quectel/core/source/machine_extint.c \
+	ports/quectel/core/source/machine_hw_spi.c \
+	ports/quectel/core/source/machine_iic.c \
+	ports/quectel/core/source/machine_lcd.c \
+	ports/quectel/core/source/machine_uart.c \
+	ports/quectel/core/source/machine_wdt.c \
+	ports/quectel/core/source/modlpm.c \
+	ports/quectel/core/source/modcelllocator.c \
+	ports/quectel/core/source/modwifiscan.c \
+	ports/quectel/core/source/sensor_sn95500.c \
+	ports/quectel/core/source/modsensor.c \
+	ports/quectel/core/source/modaudio.c \
+	ports/quectel/core/source/audio_audio.c \
+	ports/quectel/core/source/audio_tts.c \
+	ports/quectel/core/source/audio_record.c \
+	ports/quectel/core/source/audio_queue.c \
+	ports/quectel/core/source/modfota.c \
+
+ifeq ($(strip $(PLAT)),ASR)
+$(NAME)_SRCS += \
+	ports/quectel/core/source/modsecuredata.c
+endif
+
+endif
+
+ifeq ($(strip $(PLAT)),Unisoc)
+$(NAME)_SRCS += \
+	ports/quectel/core/source/modgnss.c \
+	ports/quectel/core/source/modble.c 
+endif
+
 ifeq ($(CONFIG_LVGL), y)
 $(NAME)_SRCS += \
 	ports/quectel/core/source/modlvgl.c
@@ -202,13 +220,23 @@ endif
 ifeq ($(CONFIG_CAMERA), y)
 $(NAME)_SRCS += \
 	ports/quectel/core/source/modcamera.c \
-	ports/quectel/core/source/camera_preview.c \
-	ports/quectel/core/source/camera_scandecode.c
+	ports/quectel/core/source/camera_preview.c
 endif
 
 ifeq ($(CONFIG_SPINAND), y)
 $(NAME)_SRCS += \
 	ports/quectel/core/source/machine_nandflash.c
+endif
+
+ifeq ($(CONFIG_RTMP), y)
+$(NAME)_SRCS += \
+	ports/quectel/core/source/modrtmp.c
+endif
+
+ifeq ($(CONFIG_SPI_SDCARD), y)
+$(NAME)_SRCS += \
+	extmod/vfs_fat.c \
+	extmod/vfs_fat_file.c 
 endif
 
 $(NAME)_INCS = \
@@ -219,7 +247,6 @@ $(NAME)_INCS = \
 	lib/littlefs \
 	lib/mp-readline \
 	lib/netutils \
-	lib/oofatfs \
 	lib/timeutils \
 	lib/utils \
 	ports/quectel/core/source \
@@ -231,12 +258,14 @@ COMMA=$(EMPTY),$(EMPTY)
 BUILD_TIMESTAMP=\\\"$(subst $(SPACE),_,$(subst $(COMMA),,$(shell echo $$(env LANG=en_US.UTF-8 date))))\\\"
 $(NAME)_DEFINE = \
 	MP_ENDIANNESS_LITTLE \
-	MICROPY_BUILD_DATE=\"${BUILD_TIMESTAMP}\"
+	MICROPY_BUILD_DATE=${BUILD_TIMESTAMP}
 
 $(NAME)_CFLAGS = \
 	-Wno-error=unused-parameter \
 	-Wno-error=format-truncation \
-	-Wno-error=unused-variable
+	-Wno-error=unused-variable \
+	-Wno-error=unused-function \
+	-Wno-error=format=
 
 ifeq ($(CONFIG_LVGL), y)
 $(NAME)_CFLAGS += \
@@ -247,12 +276,54 @@ $(NAME)_CFLAGS += \
 	-Wno-error=unused-function
 endif
 
-$(NAME)_COMPONENTS = peripheral 
+ifeq ($(CONFIG_SPINAND), y)
+$(NAME)_CFLAGS += \
+	-Wno-error=restrict \
+	-Wno-error=format-overflow=
+endif
+
+$(NAME)_COMPONENTS = peripheral
+
+ifeq ($(CONFIG_CAMERA_DECODE), y)
+$(NAME)_COMPONENTS += components/ZBar
+$(NAME)_SRCS += \
+	ports/quectel/core/source/camera_scandecode.c
+endif
+
+
+ifeq ($(CONFIG_CAMERA_SAVEPHOTOS), y)
+$(NAME)_SRCS += \
+	ports/quectel/core/source/camera_capture.c
+endif
+
+ifeq ($(CONFIG_JPEG), y)
+$(NAME)_COMPONENTS += components/jpeg
+endif
+
+$(NAME)_COMPONENTS += utilities
 
 ifeq ($(CONFIG_LVGL), y)
 $(NAME)_COMPONENTS += components/lvgl
 endif
 
+ifeq ($(CONFIG_SPINAND), y)
+$(NAME)_COMPONENTS += components/fs
+else ifeq ($(CONFIG_SPI_SDCARD), y)
+$(NAME)_COMPONENTS += components/fs/fatfs
+endif
+
+
+ifeq ($(CONFIG_RTMP), y)
+$(NAME)_COMPONENTS += components/rtmpdump
+endif
+
+
+
+ifeq ($(CONFIG_QUECTHING), y)
+$(NAME)_SRCS += ports/quectel/core/source/modquecIot.c
+$(NAME)_INCS += ../../components/quecsdk
+$(NAME)_COMPONENTS += components/quecsdk
+endif
 $(NAME)_PRIVATE_SCRIPT = private.mk
 
 $(NAME)_PRIVATE_SCRIPT_TARGETS = construct clean

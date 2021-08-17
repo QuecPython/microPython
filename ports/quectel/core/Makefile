@@ -16,6 +16,9 @@
 TOP := ../../..
 ROOT := $(TOP)/../..
 
+KCONFIG_CONFIG_DIR := ../../../../..
+include $(KCONFIG_CONFIG_DIR)/config/$(KCONFIG_CONFIG)
+
 ifeq ("$(origin V)", "command line")
 BUILD_VERBOSE=$(V)
 endif
@@ -224,8 +227,6 @@ PY_EXTMOD_O_BASENAME = \
 	extmod/machine_i2c.o \
 	extmod/machine_spi.o \
 	extmod/modbluetooth.o \
-	extmod/modussl_axtls.o \
-	extmod/modussl_mbedtls.o \
 	extmod/modurandom.o \
 	extmod/moduselect.o \
 	extmod/moduwebsocket.o \
@@ -237,65 +238,114 @@ PY_EXTMOD_O_BASENAME = \
 	extmod/vfs_posix.o \
 	extmod/vfs_posix_file.o \
 	extmod/vfs_fat.o \
-	extmod/vfs_fat_diskio.o \
 	extmod/vfs_fat_file.o \
 	extmod/vfs_lfs.o \
 	extmod/utime_mphal.o \
 	extmod/uos_dupterm.o \
 	lib/embed/abort_.o \
 	lib/utils/printf.o \
-	lib/utils/sys_stdio_mphal.o \
+	lib/utils/sys_stdio_mphal.o 
+
+ifneq ($(strip $(PLAT)),RDA)
+PY_EXTMOD_O_BASENAME += \
+	extmod/modussl_axtls.o \
+	extmod/modussl_mbedtls.o 
+
+endif
 
 # Sources that may contain qstrings
 SRC_QSTR_IGNORE = py/nlr%
 SRC_QSTR += $(SRC_MOD) $(filter-out $(SRC_QSTR_IGNORE),$(PY_CORE_O_BASENAME:.o=.c)) $(PY_EXTMOD_O_BASENAME:.o=.c)
 
-SRC_QSTR += source/moduos.c \
-			source/quecpython.c \
-			source/utf8togbk.c \
-			source/modsha1.c \
-			source/modsocket.c \
-			source/modostimer.c \
-			source/modexample.c \
-			source/moddatacall.c \
+SRC_QSTR += source/quecpython.c \
 			source/moddev.c \
-			source/modutime.c \
+			source/moduos.c \
+			source/modexample.c \
+			source/modsha1.c \
 			source/modutils.c \
             source/utils_crc32.c \
-			source/modsha1.c \
-			source/modnet.c \
+            source/modostimer.c \
+            source/modmachine.c \
+            source/machine_pin.c \
+            source/machine_timer.c \
+            source/machine_rtc.c \
+			source/modutime.c \
+			source/modmisc.c \
+            source/misc_power.c \
+            source/misc_powerkey.c \
+            source/misc_pwm.c \
+            source/misc_adc.c \
+            source/misc_usb.c \
+            source/modsocket.c \
+            source/modnet.c \
+            source/moddatacall.c \
 			source/modsim.c \
+            
+ifeq ($(strip $(PLAT)),ASR)
+SRC_QSTR += source/modsecuredata.c
+endif
+
+ifneq ($(strip $(PLAT)),RDA)
+SRC_QSTR += source/utf8togbk.c \
 			source/modsms.c \
-			source/modmachine.c \
 			source/machine_extint.c \
 			source/machine_hw_spi.c \
 			source/machine_iic.c \
-			source/machine_pin.c \
-			source/machine_rtc.c \
-			source/machine_timer.c \
 			source/machine_uart.c \
 			source/machine_wdt.c \
 			source/machine_lcd.c \
-			source/misc_adc.c \
-			source/misc_power.c \
-			source/misc_pwm.c \
-			source/modmisc.c \
 			source/modlpm.c \
 			source/modcelllocator.c \
-			source/modlvgl.c \
 			source/modwifiscan.c \
 			source/modaudio.c \
 			source/audio_audio.c \
 			source/audio_record.c \
+			source/audio_queue.c \
 			source/audio_tts.c \
-			source/modcamera.c \
-			source/camera_preview.c \
-			source/camera_scandecode.c \
-			source/modble.c \
 			source/sensor_sn95500.c \
 			source/modsensor.c \
-			source/misc_usb.c \
-			source/misc_powerkey.c
+			source/modvoicecall.c
+
+#quecthing
+ifeq ($(CONFIG_QUECTHING), y)
+SRC_QSTR += \
+			source/modquecIot.c
+endif
+
+#spinand
+ifeq ($(CONFIG_SPINAND), y)
+SRC_QSTR += \
+			source/machine_nandflash.c
+endif
+
+#camera
+ifeq (y,$(CONFIG_CAMERA))
+SRC_QSTR += \
+			source/modcamera.c \
+			source/camera_preview.c			
+ifeq ($(CONFIG_CAMERA_SAVEPHOTOS), y)
+SRC_QSTR +=  \
+			source/camera_capture.c
+endif
+ifeq (y,$(CONFIG_CAMERA_DECODE))
+SRC_QSTR += \
+			source/camera_scandecode.c
+endif
+endif
+
+#lvgl
+ifeq (y,$(CONFIG_LVGL))
+SRC_QSTR += \
+			source/modlvgl.c
+endif
+
+endif
+
+
+ifeq ($(strip $(PLAT)),Unisoc)
+SRC_QSTR += source/modgnss.c \
+			source/modble.c
+endif
 
 ifeq ($(strip $(PLAT)),ASR)
 SRC_QSTR += source/modfota.c
@@ -303,6 +353,10 @@ else
 ifeq ($(strip $(PLAT)),Unisoc)
 SRC_QSTR += source/modfota.c
 endif
+endif
+
+ifeq ($(CONFIG_RTMP), y)
+SRC_QSTR += source/modrtmp.c
 endif
 
 $(BUILD)/%.pp: %.c
@@ -361,6 +415,7 @@ INC += -I$(ROOT)/system/debug
 INC += -I$(ROOT)/system/dev
 INC += -I$(ROOT)/system/fs
 INC += -I$(ROOT)/system/hal
+INC += -I$(ROOT)/system/gnss
 ifeq ($(strip $(PLAT)),Unisoc)
 INC += -I$(ROOT)/system/lwip/$(strip $(PLAT))
 INC += -I$(ROOT)/system/lwip/$(strip $(PLAT))/include
@@ -398,16 +453,19 @@ INC += -I$(ROOT)/system/lwip/$(strip $(PLAT))/include
 endif
 endif
 endif
+ifeq (y, $(CONFIG_MBEDTLS))
 INC += -I$(ROOT)/system/mbedtls
 INC += -I$(ROOT)/system/mbedtls/include
 INC += -I$(ROOT)/system/mbedtls/include/mbedtls
 INC += -I$(ROOT)/system/mbedtls/library
 INC += -I$(ROOT)/system/mbedtls/port/helios/inc
+endif
 INC += -I$(ROOT)/system/network
 INC += -I$(ROOT)/system/os
 INC += -I$(ROOT)/system/startup
 INC += -I$(ROOT)/system/fota
 INC += -I$(ROOT)/system/ble
+ifeq (y, $(CONFIG_LVGL))
 INC += -I$(ROOT)/components/lvgl
 INC += -I$(ROOT)/components/lvgl/porting
 INC += -I$(ROOT)/components/lvgl/src
@@ -418,7 +476,39 @@ INC += -I$(ROOT)/components/lvgl/src/lv_hal
 INC += -I$(ROOT)/components/lvgl/src/lv_misc
 INC += -I$(ROOT)/components/lvgl/src/lv_objx
 INC += -I$(ROOT)/components/lvgl/src/lv_themes
-
+endif
+ifeq (y, $(CONFIG_QUECTHING))
+INC += -I$(ROOT)/components/quecsdk/cloud
+INC += -I$(ROOT)/components/quecsdk/driverLayer 
+INC += -I$(ROOT)/components/quecsdk/thirdLib/mqtt 
+INC += -I$(ROOT)/components/quecsdk/thirdLib/cJSON 
+INC += -I$(ROOT)/components/quecsdk/kernel 
+endif
+ifeq ($(CONFIG_SPINAND), y)
+INC += -I$(ROOT)/components/fs/include
+INC += -I$(ROOT)/components/fs/yaffs/src/direct
+INC += -I$(ROOT)/components/fs/yaffs/src/port
+INC += -I$(ROOT)/components/fs/yaffs/src
+INC += -I$(ROOT)/components/fs/yaffs
+endif
+ifeq ($(CONFIG_RTMP), y)
+INC += -I$(ROOT)/components/rtmpdump/librtmp/inc
+INC += -I$(ROOT)/components/rtmpdump/libz/inc
+endif
+INC += -I$(ROOT)/utilities
+ifeq ($(CONFIG_JPEG), y)
+INC += -I$(ROOT)/components/jpeg/jpeg-9c
+INC += -I$(ROOT)/components/jpeg
+endif
+ifeq (y,$(CONFIG_CAMERA_DECODE))
+INC += -I$(ROOT)/components/ZBar/zbar
+INC += -I$(ROOT)/components/ZBar/include
+INC += -I$(ROOT)/components/ZBar/zbar/decoder
+INC += -I$(ROOT)/components/ZBar/zbar/qrcode
+endif
+ifeq ($(CONFIG_SPI_SDCARD), y)
+INC += -I$(ROOT)/components/fs/fatfs/include
+endif
 
 # compiler settings
 CWARN = -Wall -Werror
@@ -475,7 +565,25 @@ $(BUILD)/%.mpy: $(FROZEN_MPY_DIR)/%.py
 	@$(ECHO) "MPY $<"
 	$(Q)$(MKDIR) -p $(dir $@)
 	$(Q)$(MPY_CROSS) -o $@ -s $(<:$(FROZEN_MPY_DIR)/%=%) $(MPY_CROSS_FLAGS) $<
-	
+
+ifeq ($(strip $(PLAT)),RDA)
+$(BUILD)/_frozen_mpy.c: $(BUILD)/_boot_RDA.mpy \
+						$(BUILD)/system.mpy \
+						$(BUILD)/dataCall.mpy \
+						$(BUILD)/umqtt.mpy \
+						$(BUILD)/log.mpy \
+						$(HEADER_BUILD)/qstrdefs.generated.h
+	@$(ECHO) "MISC freezing bytecode"
+	$(Q)$(MPY_TOOL) -f -q \
+						$(HEADER_BUILD)/qstrdefs.preprocessed.h \
+						$(BUILD)/_boot_RDA.mpy \
+						$(BUILD)/system.mpy \
+						$(BUILD)/dataCall.mpy \
+						$(BUILD)/umqtt.mpy \
+						$(BUILD)/log.mpy \
+						> $@
+
+else
 $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/_boot.mpy \
 						$(BUILD)/umqtt.mpy \
@@ -498,8 +606,13 @@ $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/backup_restore.mpy \
 						$(BUILD)/file_crc32.mpy \
 						$(BUILD)/system.mpy \
+						$(BUILD)/gnss.mpy \
+						$(BUILD)/unzip.mpy \
+						$(BUILD)/queue.mpy \
+						$(BUILD)/sys_bus.mpy \
+						$(BUILD)/event_message.mpy \
 						$(HEADER_BUILD)/qstrdefs.generated.h
-	$(ECHO) "MISC freezing bytecode"
+	@$(ECHO) "MISC freezing bytecode"
 	$(Q)$(MPY_TOOL) -f -q \
 						$(HEADER_BUILD)/qstrdefs.preprocessed.h \
 						$(BUILD)/_boot.mpy \
@@ -522,9 +635,15 @@ $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/app_fota.mpy \
 						$(BUILD)/file_crc32.mpy \
 						$(BUILD)/backup_restore.mpy \
+						$(BUILD)/gnss.mpy \
 						$(BUILD)/system.mpy \
+						$(BUILD)/unzip.mpy \
+						$(BUILD)/queue.mpy \
+						$(BUILD)/sys_bus.mpy \
+						$(BUILD)/event_message.mpy \
 						> $@
 
+endif
 $(BUILD):
 	$(Q)echo creating directory: $@
 	-$(Q)$(MKDIR) $@

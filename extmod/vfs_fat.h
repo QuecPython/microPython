@@ -28,7 +28,7 @@
 #define MICROPY_INCLUDED_EXTMOD_VFS_FAT_H
 
 #include "py/obj.h"
-#include "lib/oofatfs/ff.h"
+#include "ff.h"
 #include "extmod/vfs.h"
 
 typedef struct _fs_user_mount_t {

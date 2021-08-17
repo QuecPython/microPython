@@ -26,11 +26,21 @@ def replSetEnable(flag=0):
     import ujson
     
     if "system_config.json" in uos.listdir("usr/"):
+        datacall_flag = -1
         try:
+            with open("/usr/system_config.json", "r", encoding='utf-8') as fd:
+                json_data = ujson.load(fd)
+                datacall_flag = json_data.get("datacallFlag",-1)
+                
             with open("/usr/system_config.json", "w+", encoding='utf-8') as fd:
-                repl_data = ujson.dumps({"replFlag": flag})
-                fd.write(repl_data)
+                #ujson.load()
+                if datacall_flag != -1:
+                    json_data = ujson.dumps({"replFlag": flag, "datacallFlag": datacall_flag})
+                    fd.write(json_data)
+                else:
+                    repl_data = ujson.dumps({"replFlag": flag})
+                    fd.write(repl_data)
         except:
-            raise OSError("The config.JSON file is abnormal, please check!")
+            raise OSError("The system_config.JSON file is abnormal, please check!")
     misc.replEnable(flag)
     return 0

@@ -41,9 +41,11 @@ struct _mp_state_thread_t;
 
 struct _mp_state_thread_t *mp_thread_get_state(void);
 void mp_thread_set_state(struct _mp_state_thread_t *state);
-void mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size);
+int mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size);
 void mp_thread_start(void);
 void mp_thread_finish(void);
+bool mp_thread_finish_by_threadid(int thread_id);
+void _vPortCleanUpTCB(void *tcb);
 void mp_thread_mutex_init(mp_thread_mutex_t *mutex);
 int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait);
 void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex);

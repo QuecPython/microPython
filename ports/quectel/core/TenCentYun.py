@@ -48,27 +48,30 @@ class TXyun:
         self.url = "http://ap-guangzhou.gateway.tencentdevices.com/register/dev"
         self.flag = True
         self.mqttObj = True
-        
-    def setMqtt(self, clean_session=True, keepAlive=300, reconn=True):
+        self.reconn = True
+        self.error_callback = None
+
+    def setMqtt(self, clean_session=True, keepAlive=300, reconn=True, pingmaxnum=0):
+        self.reconn = reconn
         if (not self.mqttObj) and (self.mqtt_client != None):
             return self.mqtt_client
         if self.ProductSecret != None:
             self.DynamicConnectInfo()
             try:
-                self.mqtt_client = self.connect(keepAlive, clean_session, reconn=reconn)
+                self.mqtt_client = self.connect(keepAlive, clean_session, reconn=reconn, pingmaxnum=pingmaxnum)
                 return 0
             except:
                 return -1
         else:
             try:
-                self.mqtt_client = self.connect(keepAlive, clean_session,reconn=reconn)
+                self.mqtt_client = self.connect(keepAlive, clean_session,reconn=reconn, pingmaxnum=pingmaxnum)
                 return 0
             except:
                 return -1
 
-    def connect(self, keepAlive, clean_session, reconn):
+    def connect(self, keepAlive, clean_session, reconn, pingmaxnum):
         self.formatConnectInfo()
-        mqtt_client = MQTTClient(self.clientid, self.mqtt_server, 1883, self.username, self.password,keepAlive,reconn=reconn)
+        mqtt_client = MQTTClient(self.clientid,self.mqtt_server,1883,self.username,self.password,keepAlive,reconn=reconn,pingmaxnum=pingmaxnum)
         mqtt_client.connect(clean_session=clean_session)
         self.mqttObj = False
         mqtt_client.set_callback(self.proc)
@@ -161,14 +164,19 @@ class TXyun:
         self.mqtt_client.disconnect()
 
     def close(self):
-        self.mqtt_client.close()
+        if self.mqtt_client is not None:
+            self.mqtt_client.close()
+        return -1
+
 
     def ping(self):
         self.mqtt_client.ping()
 
     def getTXyunsta(self):
-        txyunsta = self.mqtt_client.get_mqttsta()
-        return txyunsta
+        if self.mqtt_client is not None:
+            txyunsta = self.mqtt_client.get_mqttsta()
+            return txyunsta
+        return -1
         
     '''
     def __loop_forever(self, t):
@@ -186,11 +194,25 @@ class TXyun:
                     break
                 else:
                     self.mqtt_client.wait_msg()
-            except OSError:
-                return -1
+            except OSError as e:
+                if not self.flag:
+                    break
+                if self.error_callback is not None:
+                    self.error_callback(str(e))
+                    break
+                raise e
+
+
+    def error_register_cb(self, func):
+        self.error_callback = func
+        if self.mqtt_client is not None:
+            self.mqtt_client.error_register_cb(func)
 
     def start(self):
+        task_stacksize =_thread.stack_size()
+        _thread.stack_size(16*1024)
         _thread.start_new_thread(self.__listen, ())
+        _thread.stack_size(task_stacksize)
         # t = Timer(1)
         # t.start(period=20000, mode=t.PERIODIC, callback=self.__loop_forever)
 

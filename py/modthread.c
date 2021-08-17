@@ -127,21 +127,25 @@ STATIC const mp_obj_type_t mp_type_thread_lock = {
 /****************************************************************/
 // _thread module
 
-STATIC size_t thread_stack_size = 8192;
-
 STATIC mp_obj_t mod_thread_get_ident(void) {
     return mp_obj_new_int_from_uint((uintptr_t)mp_thread_get_state());
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(mod_thread_get_ident_obj, mod_thread_get_ident);
 
+STATIC size_t thread_stack_size = MP_THREAD_DEFAULT_STACK_SIZE;
 STATIC mp_obj_t mod_thread_stack_size(size_t n_args, const mp_obj_t *args) {
-    mp_obj_t ret = mp_obj_new_int_from_uint(thread_stack_size);
-    if (n_args == 0) {
-        thread_stack_size = 0;
-    } else {
-        thread_stack_size = mp_obj_get_int(args[0]);
+    if (n_args != 0) 
+	{
+		int stack_size = mp_obj_get_int(args[0]);
+		if((stack_size * sizeof(uint32_t)) < MP_THREAD_MIN_STACK_SIZE)
+		{
+			return mp_obj_new_int(-1);
+		}
+		thread_stack_size = stack_size * sizeof(uint32_t);
+		return mp_obj_new_int(0);
     }
-    return ret;
+	
+    return mp_obj_new_int_from_uint(thread_stack_size / sizeof(uint32_t));
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_thread_stack_size_obj, 0, 1, mod_thread_stack_size);
 
@@ -265,9 +269,9 @@ STATIC mp_obj_t mod_thread_start_new_thread(size_t n_args, const mp_obj_t *args)
     th_args->fun = args[0];
 
     // spawn the thread!
-    mp_thread_create(thread_entry, th_args, &th_args->stack_size);
+    int thread_id = mp_thread_create(thread_entry, th_args, &th_args->stack_size);
 
-    return mp_const_none;
+    return mp_obj_new_int(thread_id);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_thread_start_new_thread_obj, 2, 3, mod_thread_start_new_thread);
 
@@ -290,6 +294,52 @@ STATIC mp_obj_t mod_thread_get_heap_size(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(mod_thread_get_heap_size_obj, mod_thread_get_heap_size);
 
+//删除线程
+STATIC mp_obj_t mod_thread_stop_thread(mp_obj_t thread_id)
+{
+	Helios_Thread_t curr_id = Helios_Thread_GetID(); 
+    int th_id = mp_obj_get_int(thread_id);
+    
+    extern Helios_Thread_t ql_micropython_task_ref;
+	
+    //自己删除自己,先退出线程锁
+    if((curr_id == (Helios_Thread_t)th_id) || (0 == th_id))
+	{
+		th_id = (int)curr_id;
+		//不允许删除主线程
+		if(th_id == ql_micropython_task_ref)
+		{
+			mp_raise_ValueError("Deleting the main thread is not allowed!");
+
+			return mp_obj_new_int(-1);//must not be here
+		}
+		
+		MP_THREAD_GIL_EXIT();	
+	}
+	
+    if(mp_thread_finish_by_threadid(th_id)){
+        _vPortCleanUpTCB((void *)th_id);
+        
+        if(curr_id == (Helios_Thread_t)th_id)
+	    {
+			Helios_Thread_Exit();
+			for(;;){;}
+	    }
+	    else
+	    {
+        	Helios_Thread_Delete((Helios_Thread_t)th_id);
+        }
+        return mp_obj_new_int(0);
+    }
+	
+	mp_raise_msg_varg(&mp_type_ValueError, "No thread with thread id %d was found!", th_id);
+	
+	return mp_obj_new_int(-1);//must not be here
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mod_thread_stop_thread_obj, mod_thread_stop_thread);
+
+
 STATIC const mp_rom_map_elem_t mp_module_thread_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR__thread) },
     { MP_ROM_QSTR(MP_QSTR_LockType), MP_ROM_PTR(&mp_type_thread_lock) },
@@ -299,6 +349,7 @@ STATIC const mp_rom_map_elem_t mp_module_thread_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mod_thread_exit_obj) },
     { MP_ROM_QSTR(MP_QSTR_allocate_lock), MP_ROM_PTR(&mod_thread_allocate_lock_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_heap_size), MP_ROM_PTR(&mod_thread_get_heap_size_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop_thread), MP_ROM_PTR(&mod_thread_stop_thread_obj) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(mp_module_thread_globals, mp_module_thread_globals_table);

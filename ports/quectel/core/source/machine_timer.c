@@ -25,7 +25,7 @@
 #include "helios_debug.h"
 
 typedef unsigned long int UINT32;
-#define HELIOS_TIMER_LOG(msg, ...)      custom_log("TIMER", msg, ##__VA_ARGS__)
+#define HELIOS_TIMER_LOG(msg, ...)      custom_log("machine_timer", msg, ##__VA_ARGS__)
 
 
 typedef enum
@@ -219,7 +219,7 @@ STATIC mp_obj_t machine_timer_deinit(mp_obj_t self_in) {
 
     
     HELIOS_TIMER_LOG("timer deinit: id (%#X) \r\n",self->timer_id_real);
-	if(self->timer_id_real > 0)
+	if(self->timer_id_real)
 	{
 		HELIOS_TIMER_LOG("timer Helios_Timer_Deinit (%#X) \r\n",self->timer_id_real);		
 		Helios_Timer_Deinit(self->timer_id_real);

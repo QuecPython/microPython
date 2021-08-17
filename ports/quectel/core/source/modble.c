@@ -15,6 +15,7 @@
  */
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,7 +29,9 @@
 
 #define MOD_BLE_LOG(msg, ...)      custom_log(ble, msg, ##__VA_ARGS__)
 
-static mp_obj_t g_ble_callback = NULL;
+static mp_obj_t g_ble_server_callback = NULL;
+static mp_obj_t g_ble_client_callback = NULL;
+
 
 static void qpy_ble_data_print(size_t len, void *data)
 {
@@ -60,7 +63,7 @@ static void qpy_ble_data_print(size_t len, void *data)
 }
 
 
-static void qpy_ble_user_callback(void *ind_msg_buf, void *ctx)
+static void qpy_ble_server_user_callback(void *ind_msg_buf, void *ctx)
 {
 	Helios_EventId *event = (Helios_EventId *)ind_msg_buf;
 	uint32_t event_id = event->id;
@@ -80,10 +83,10 @@ static void qpy_ble_user_callback(void *ind_msg_buf, void *ctx)
 				mp_obj_new_int(status),
 			};
 			
-			if (g_ble_callback)
+			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_callback, mp_obj_new_tuple(2, tuple));
+				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(2, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -111,13 +114,14 @@ static void qpy_ble_user_callback(void *ind_msg_buf, void *ctx)
 				mp_obj_new_int(event_id),
 				mp_obj_new_int(status),
 				mp_obj_new_int(conn_id),
-				mp_obj_new_str(addr_buf, strlen(addr_buf)),
+				mp_obj_new_bytes(p->addr, HELIOS_BT_MAC_ADDRESS_SIZE),
+				//mp_obj_new_str(addr_buf, strlen(addr_buf)),
 			};
 		
-			if (g_ble_callback)
+			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			
@@ -137,10 +141,10 @@ static void qpy_ble_user_callback(void *ind_msg_buf, void *ctx)
 				mp_obj_new_int(conn_param->timeout)
 			};
 			
-			if (g_ble_callback)
+			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_callback, mp_obj_new_tuple(7, tuple));
+				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(7, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -159,10 +163,10 @@ static void qpy_ble_user_callback(void *ind_msg_buf, void *ctx)
 				mp_obj_new_int(ble_mtu),
 			};
 			
-			if (g_ble_callback)
+			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			
@@ -184,10 +188,10 @@ static void qpy_ble_user_callback(void *ind_msg_buf, void *ctx)
 				mp_obj_new_bytes(ble_data->uuid_l, sizeof(ble_data->uuid_l))	
 			};
 			
-			if (g_ble_callback)
+			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_callback, mp_obj_new_tuple(7, tuple));
+				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(7, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			
@@ -218,6 +222,45 @@ STATIC mp_obj_t qpy_ble_gatt_stop(void)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_gatt_stop_obj, qpy_ble_gatt_stop);
 
 
+STATIC mp_obj_t qpy_ble_get_status(void)
+{
+	int ret = 0;
+	Helios_BtBle_Status status = 0;
+	ret = Helios_BLE_GetStatus(&status);
+	if (ret == 0)
+	{
+		return mp_obj_new_int(status);
+	}
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_get_status_obj, qpy_ble_get_status);
+
+#if 0
+STATIC mp_obj_t qpy_ble_get_connect_status(mp_obj_t addr)
+{
+	int ret = 0;
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(addr, &datainfo, MP_BUFFER_READ);
+	Helios_BtBleAddr bleaddr = {0};
+
+	if (datainfo.len != 6)
+	{
+		mp_raise_ValueError("invalid value, addr should be 6 bytes.");
+	}
+	
+	memcpy((void *)bleaddr.addr, (const void *)datainfo.buf, datainfo.len);
+	Helios_BleConnectionStatus status = 0;
+	ret = Helios_BLE_GetConnectionStatus(&bleaddr, &status);
+	if (ret == 0)
+	{
+		mp_obj_new_int(status);
+	}
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_get_conn_status_obj, qpy_ble_get_connect_status);
+#endif
+
+
 STATIC mp_obj_t qpy_ble_gatt_set_local_name(mp_obj_t code, mp_obj_t name)
 {
 	int ret = 0;
@@ -246,8 +289,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_ble_gatt_set_local_name_obj, qpy_ble_gatt_s
 STATIC mp_obj_t qpy_ble_gatt_server_init(mp_obj_t callback)
 {
 	Helios_BLEInitStruct info = {0};
-	g_ble_callback = callback;
-	info.ble_user_cb = qpy_ble_user_callback;
+	g_ble_server_callback = callback;
+	info.ble_user_cb = qpy_ble_server_user_callback;
 	int ret = Helios_BLE_GattServerInit(&info);
 	return mp_obj_new_int(ret);
 }
@@ -588,6 +631,566 @@ STATIC mp_obj_t qpy_ble_adv_stop(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_adv_stop_obj, qpy_ble_adv_stop);
 
+static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
+{
+	Helios_EventId *event = (Helios_EventId *)ind_msg_buf;
+	uint32_t event_id = event->id;
+	uint32_t status = event->param1;
+	uint32_t param2 = event->param2;
+	uint32_t param3 = event->param3;
+
+	switch (event_id)
+	{
+		case HELIOS_BT_START_STATUS_IND:
+		case HELIOS_BT_STOP_STATUS_IND:
+		case HELIOS_BLE_GATT_START_DISCOVER_SERVICE_IND:
+		case HELIOS_BLE_GATT_CHARA_WRITE_WITH_RSP_IND:
+		case HELIOS_BLE_GATT_DESC_WRITE_WITH_RSP_IND:
+		case HELIOS_BLE_GATT_CHARA_WRITE_WITHOUT_RSP_IND:
+		{
+			mp_obj_t tuple[2] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+			};
+			
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(2, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		case HELIOS_BLE_SCAN_REPORT_IND:
+		{
+			Helios_BleScanReportInfo *pinfo = (Helios_BleScanReportInfo *)param2;
+			char addr_buf[20] = {0};
+
+			sprintf(addr_buf, "%02x:%02x:%02x:%02x:%02x:%02x", \
+				pinfo->addr.addr[0], pinfo->addr.addr[1], pinfo->addr.addr[2], \
+				pinfo->addr.addr[3], pinfo->addr.addr[4], pinfo->addr.addr[5]);
+			MOD_BLE_LOG("addr:%s\r\n", addr_buf);
+			
+			
+			mp_obj_t tuple[9] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(pinfo->event_type),
+				mp_obj_new_str((const char *)pinfo->name, pinfo->name_length),
+				mp_obj_new_int(pinfo->addr_type),
+				mp_obj_new_bytes(pinfo->addr.addr, HELIOS_BT_MAC_ADDRESS_SIZE),
+				//mp_obj_new_str(addr_buf, strlen(addr_buf)),
+				mp_obj_new_int(pinfo->rssi),
+				mp_obj_new_int(pinfo->data_length),
+				mp_obj_new_bytes(pinfo->raw_data, pinfo->data_length)
+			};
+		
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(9, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		case HELIOS_BLE_CONNECT_IND:
+		case HELIOS_BLE_DISCONNECT_IND:
+		{
+			Helios_BtBleAddr *p = (Helios_BtBleAddr *)param2;
+			int conn_id = param3;
+			char addr_buf[20] = {0};
+
+			sprintf(addr_buf, "%02x:%02x:%02x:%02x:%02x:%02x", p->addr[0], p->addr[1], p->addr[2], p->addr[3], p->addr[4], p->addr[5]);
+			MOD_BLE_LOG("conn_id:%d\r\n", conn_id);
+			MOD_BLE_LOG("addr:%s\r\n", addr_buf);
+
+			mp_obj_t tuple[4] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(conn_id),
+				mp_obj_new_bytes(p->addr, HELIOS_BT_MAC_ADDRESS_SIZE),
+				//mp_obj_new_str(addr_buf, strlen(addr_buf)),
+			};
+		
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		case HELIOS_BLE_UPDATE_CONN_PARAM_IND:
+		{
+			Helios_BleUpdateConnInfos *conn_param = (Helios_BleUpdateConnInfos *)param2;
+			mp_obj_t tuple[7] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(conn_param->conn_id),
+				mp_obj_new_int(conn_param->max_interval),
+				mp_obj_new_int(conn_param->min_interval),
+				mp_obj_new_int(conn_param->latency),
+				mp_obj_new_int(conn_param->timeout)
+			};
+			
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(7, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		case HELIOS_BLE_GATT_MTU:
+		{
+			unsigned short handle = param2;
+			unsigned short ble_mtu = param3;
+
+			MOD_BLE_LOG("connect mtu successful: handle=%d, mtu=%d\r\n", param2, param3);
+			mp_obj_t tuple[4] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(handle),
+				mp_obj_new_int(ble_mtu),
+			};
+			
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		case HELIOS_BLE_GATT_DISCOVER_SERVICE_IND:
+		{
+			Helios_BleGattPrimeService *pinfo = (Helios_BleGattPrimeService *)param2;
+			mp_obj_t tuple[5] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(pinfo->start_handle),
+				mp_obj_new_int(pinfo->end_handle),
+				mp_obj_new_int(pinfo->uuid),
+			};
+			
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(5, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		case HELIOS_BLE_GATT_DISCOVER_CHARACTERISTIC_DATA_IND:
+		case HELIOS_BLE_GATT_DISCOVER_CHARA_DESC_IND:
+		case HELIOS_BLE_GATT_CHARA_READ_IND:
+		case HELIOS_BLE_GATT_DESC_READ_IND:
+		case HELIOS_BLE_GATT_CHARA_READ_BY_UUID_IND:
+		case HELIOS_BLE_GATT_CHARA_MULTI_READ_IND:
+		case HELIOS_BLE_GATT_RECV_NOTIFICATION_IND:
+		case HELIOS_BLE_GATT_RECV_INDICATION_IND:
+		{
+			Helios_AttGeneralRsp *pinfo = (Helios_AttGeneralRsp *)param2;
+			mp_obj_t tuple[4] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(pinfo->length),
+				mp_obj_new_bytes(pinfo->pay_load, pinfo->length)
+			};
+			
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			free(pinfo->pay_load);
+			break;
+		}
+		case HELIOS_BLE_GATT_ATT_ERROR_IND:
+		{
+			uint8_t errcode = param2;
+			mp_obj_t tuple[3] = 
+			{
+				mp_obj_new_int(event_id),
+				mp_obj_new_int(status),
+				mp_obj_new_int(errcode)
+			};
+			
+			if (g_ble_client_callback)
+			{
+				MOD_BLE_LOG("[ble] callback start.\r\n");
+				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(3, tuple));
+				MOD_BLE_LOG("[ble] callback end.\r\n");
+			}
+			break;
+		}
+		default:
+			break;
+	}
+	
+}
+
+STATIC mp_obj_t qpy_ble_gatt_client_init(mp_obj_t callback)
+{
+	Helios_BLEInitStruct info = {0};
+	g_ble_client_callback = callback;
+	info.ble_user_cb = qpy_ble_client_user_callback;
+	int ret = Helios_BLE_GattClientInit(&info);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_gatt_client_init_obj, qpy_ble_gatt_client_init);
+
+
+STATIC mp_obj_t qpy_ble_gatt_client_release(void)
+{
+	int ret = 0;
+	ret = Helios_BLE_GattClientRelease();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_gatt_client_release_obj, qpy_ble_gatt_client_release);
+
+
+STATIC mp_obj_t qpy_ble_set_scan_param(size_t n_args, const mp_obj_t *args)
+{
+	int scan_mode = mp_obj_get_int(args[0]);
+	int interval  = mp_obj_get_int(args[1]);
+	int scan_time = mp_obj_get_int(args[2]);
+	int filter    = mp_obj_get_int(args[3]);
+	int addr_type = mp_obj_get_int(args[4]);
+	
+	Helios_BleScanParam scan_param = {0};
+
+	if ((scan_mode != 0) && (scan_mode != 1))
+	{
+		mp_raise_ValueError("invalid value, scan_mode should be in [0,1].");
+	}
+	if ((interval < 0x0004) || (interval > 0x4000))
+	{
+		mp_raise_ValueError("invalid value, interval should be in [0x0004,0x4000].");
+	}
+	if ((scan_time < 0x0004) || (scan_time > 0x4000))
+	{
+		mp_raise_ValueError("invalid value, scan_time should be in [0x0004,0x4000].");
+	}
+	if ((filter < 0) || (filter > 3))
+	{
+		mp_raise_ValueError("invalid value, filter_policy should be in [0,3].");
+	}
+	if ((addr_type != 0) && (addr_type != 1))
+	{
+		mp_raise_ValueError("invalid value, addr_type should be in [0,1].");
+	}
+
+	scan_param.scan_mode = scan_mode;
+	scan_param.interval  = interval;
+	scan_param.window    = scan_time;
+	scan_param.filter    = filter;
+	scan_param.own_addr_type = addr_type;
+
+	int ret = Helios_BLE_ScanSetParam(&scan_param);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_set_scan_param_obj, 5, 5, qpy_ble_set_scan_param);
+
+
+STATIC mp_obj_t qpy_ble_scan_start(void)
+{
+	int ret = 0;
+	ret = Helios_BLE_ScanStart();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_scan_start_obj, qpy_ble_scan_start);
+
+
+STATIC mp_obj_t qpy_ble_scan_stop(void)
+{
+	int ret = 0;
+	ret = Helios_BLE_ScanStop();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_scan_stop_obj, qpy_ble_scan_stop);
+
+
+STATIC mp_obj_t qpy_ble_connect_addr(mp_obj_t addr_type, mp_obj_t addr)
+{
+	int addrtype = mp_obj_get_int(addr_type);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(addr, &datainfo, MP_BUFFER_READ);
+	Helios_BtBleAddr bleaddr = {0};
+
+	if ((addrtype != 0) && (addrtype != 1))
+	{
+		mp_raise_ValueError("invalid value, addr_type should be in [0,1].");
+	}
+	if (datainfo.len != 6)
+	{
+		mp_raise_ValueError("invalid value, addr should be 6 bytes.");
+	}
+	Helios_BleAddressType atype = addrtype;
+	memcpy((void *)bleaddr.addr, (const void *)datainfo.buf, datainfo.len);
+	int ret = Helios_BLE_ConnectAddr(atype, &bleaddr);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_ble_connect_addr_obj, qpy_ble_connect_addr);
+
+
+STATIC mp_obj_t qpy_ble_cancel_connect(mp_obj_t addr)
+{
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(addr, &datainfo, MP_BUFFER_READ);
+	Helios_BtBleAddr bleaddr = {0};
+
+	if (datainfo.len != 6)
+	{
+		mp_raise_ValueError("invalid value, addr should be 6 bytes.");
+	}
+	
+	memcpy((void *)bleaddr.addr, (const void *)datainfo.buf, datainfo.len);
+	int ret = Helios_BLE_CancelConnect(&bleaddr);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_cancel_connect_obj, qpy_ble_cancel_connect);
+
+
+STATIC mp_obj_t qpy_ble_disconnect(mp_obj_t connect_id)
+{
+	uint16_t conn_id = mp_obj_get_int(connect_id);
+	int ret = Helios_BLE_Disconnect(conn_id);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_disconnect_obj, qpy_ble_disconnect);
+
+
+STATIC mp_obj_t qpy_ble_gatt_discover_all_service(mp_obj_t connect_id)
+{
+	uint16_t conn_id = mp_obj_get_int(connect_id);
+	int ret = Helios_BLE_GattDiscoverAllService(conn_id);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_gatt_discover_service_obj, qpy_ble_gatt_discover_all_service);
+
+
+STATIC mp_obj_t qpy_ble_gatt_discover_by_uuid(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	int conn_id   = mp_obj_get_int(args[0]);
+	int uuid_type = mp_obj_get_int(args[1]);
+	int uuid_s    = mp_obj_get_int(args[2]);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(args[3], &datainfo, MP_BUFFER_READ);
+	Helios_BleGattUuid uuid = {0};
+
+	if ((uuid_type != 0) && (uuid_type != 1))
+	{
+		mp_raise_ValueError("invalid value, uuid_type should be in [0,1].");
+	}
+	if (datainfo.len > 16)
+	{
+		mp_raise_ValueError("invalid value, the length of data should be no more than 16 bytes.");
+	}
+
+	uint16_t connect_id = conn_id;
+	uuid.uuid_type = uuid_type;
+	uuid.uuid_s = uuid_s;
+	memcpy((void *)uuid.uuid_l, (const void *)datainfo.buf, datainfo.len);
+	qpy_ble_data_print(datainfo.len, (void *)uuid.uuid_l);
+	ret = Helios_BLE_GattDiscoverByUuid(connect_id, &uuid);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_discover_by_uuid_obj, 4, 4, qpy_ble_gatt_discover_by_uuid);
+
+
+STATIC mp_obj_t qpy_ble_gatt_discover_all_includes(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	int conn_id   = mp_obj_get_int(args[0]);
+	int start_handle  = mp_obj_get_int(args[1]);
+	int end_handle    = mp_obj_get_int(args[2]);
+	Helios_BleHandle handle = {0};
+
+	uint16_t connect_id = conn_id;
+	handle.start_handle = start_handle;
+	handle.end_handle   = end_handle;
+	ret = Helios_BLE_GattDiscoverAllIncludes(connect_id, &handle);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_discover_all_includes_obj, 3, 3, qpy_ble_gatt_discover_all_includes);
+
+
+STATIC mp_obj_t qpy_ble_gatt_discover_all_chara(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	int conn_id   = mp_obj_get_int(args[0]);
+	int start_handle  = mp_obj_get_int(args[1]);
+	int end_handle    = mp_obj_get_int(args[2]);
+	Helios_BleHandle handle = {0};
+
+	uint16_t connect_id = conn_id;
+	handle.start_handle = start_handle;
+	handle.end_handle   = end_handle;
+	ret = Helios_BLE_GattDiscoverAllChara(connect_id, &handle);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_discover_all_chara_obj, 3, 3, qpy_ble_gatt_discover_all_chara);
+
+
+STATIC mp_obj_t qpy_ble_gatt_discover_all_chara_desc(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	int conn_id   = mp_obj_get_int(args[0]);
+	int start_handle  = mp_obj_get_int(args[1]);
+	int end_handle    = mp_obj_get_int(args[2]);
+	Helios_BleHandle handle = {0};
+
+	uint16_t connect_id = conn_id;
+	handle.start_handle = start_handle;
+	handle.end_handle   = end_handle;
+	ret = Helios_BLE_GattDiscoverAllCharaDesc(connect_id, &handle);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_discover_all_charadesc_obj, 3, 3, qpy_ble_gatt_discover_all_chara_desc);
+
+
+STATIC mp_obj_t qpy_ble_gatt_read_chara_by_uuid(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	int conn_id   = mp_obj_get_int(args[0]);
+	int start_handle  = mp_obj_get_int(args[1]);
+	int end_handle    = mp_obj_get_int(args[2]);
+	int uuid_type = mp_obj_get_int(args[3]);
+	int uuid_s    = mp_obj_get_int(args[4]);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(args[5], &datainfo, MP_BUFFER_READ);
+	Helios_BleGattUuid uuid = {0};
+	Helios_BleHandle handle = {0};
+
+	if ((uuid_type != 0) && (uuid_type != 1))
+	{
+		mp_raise_ValueError("invalid value, uuid_type should be in [0,1].");
+	}
+	if (datainfo.len > 16)
+	{
+		mp_raise_ValueError("invalid value, the length of data should be no more than 16 bytes.");
+	}
+
+	uint16_t connect_id = conn_id;
+	handle.start_handle = start_handle;
+	handle.end_handle   = end_handle;
+	uuid.uuid_type = uuid_type;
+	uuid.uuid_s = uuid_s;
+	memcpy((void *)uuid.uuid_l, (const void *)datainfo.buf, datainfo.len);
+	qpy_ble_data_print(datainfo.len, (void *)uuid.uuid_l);
+	ret = Helios_BLE_GattReadCharaByUuid(connect_id, &handle, &uuid);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_read_chara_by_uuid_obj, 6, 6, qpy_ble_gatt_read_chara_by_uuid);
+
+
+STATIC mp_obj_t qpy_ble_gatt_read_chara_by_handle(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	uint16_t conn_id = mp_obj_get_int(args[0]);
+	uint16_t handle  = mp_obj_get_int(args[1]);
+	uint16_t offset  = mp_obj_get_int(args[2]);
+	uint8_t islong   = mp_obj_get_int(args[3]);
+	
+	ret = Helios_BLE_GattReadCharaByHandle(conn_id, handle, offset, islong);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_read_chara_by_handle_obj, 4, 4, qpy_ble_gatt_read_chara_by_handle);
+
+
+STATIC mp_obj_t qpy_ble_gatt_read_multi_chara(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	uint16_t conn_id = mp_obj_get_int(args[0]);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(args[1], &datainfo, MP_BUFFER_READ);
+
+	uint8_t *handle = datainfo.buf;
+	uint16_t length = datainfo.len;
+	
+	ret = Helios_BLE_GattReadMultiChara(conn_id, handle, length);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_read_multi_chara_obj, 2, 2, qpy_ble_gatt_read_multi_chara);
+
+
+STATIC mp_obj_t qpy_ble_gatt_read_chara_desc(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	uint16_t conn_id = mp_obj_get_int(args[0]);
+	uint16_t handle  = mp_obj_get_int(args[1]);
+	uint8_t islong   = mp_obj_get_int(args[2]);
+	
+	ret = Helios_BLE_GattReadCharaDesc(conn_id, handle, islong);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_read_chara_desc_obj, 3, 3, qpy_ble_gatt_read_chara_desc);
+
+
+STATIC mp_obj_t qpy_ble_gatt_write_chara(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	uint16_t conn_id = mp_obj_get_int(args[0]);
+	uint16_t handle  = mp_obj_get_int(args[1]);
+	uint16_t offset  = mp_obj_get_int(args[2]);
+	uint8_t  islong  = mp_obj_get_int(args[3]);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(args[4], &datainfo, MP_BUFFER_READ);
+	Helios_BleCharaData info = {0};
+
+	info.offset = offset;
+	info.islong = islong;
+	info.chara.data = datainfo.buf;
+	info.chara.length = datainfo.len;
+	ret = Helios_BLE_GattWriteChara(conn_id, handle, &info);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_write_chara_obj, 5, 5, qpy_ble_gatt_write_chara);
+
+
+STATIC mp_obj_t qpy_ble_gatt_write_chara_desc(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	uint16_t conn_id = mp_obj_get_int(args[0]);
+	uint16_t handle  = mp_obj_get_int(args[1]);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(args[2], &datainfo, MP_BUFFER_READ);
+	Helios_BleGeneralData info = {0};
+
+	info.data = datainfo.buf;
+	info.length = datainfo.len;
+	ret = Helios_BLE_GattWriteCharaDesc(conn_id, handle, &info);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_write_chara_desc_obj, 3, 3, qpy_ble_gatt_write_chara_desc);
+
+
+STATIC mp_obj_t qpy_ble_gatt_write_chara_no_rsp(size_t n_args, const mp_obj_t *args)
+{
+	int ret = 0;
+	uint16_t conn_id = mp_obj_get_int(args[0]);
+	uint16_t handle  = mp_obj_get_int(args[1]);
+	mp_buffer_info_t datainfo = {0};
+	mp_get_buffer_raise(args[2], &datainfo, MP_BUFFER_READ);
+	Helios_BleGeneralData info = {0};
+
+	info.data = datainfo.buf;
+	info.length = datainfo.len;
+	ret = Helios_BLE_GattWriteCharaNoRsp(conn_id, handle, &info);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_write_chara_norsp_obj, 3, 3, qpy_ble_gatt_write_chara_no_rsp);
+
 
 STATIC const mp_rom_map_elem_t mp_module_ble_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR___name__),			MP_ROM_QSTR(MP_QSTR_ble) 							},
@@ -595,6 +1198,8 @@ STATIC const mp_rom_map_elem_t mp_module_ble_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_serverRelease),		MP_ROM_PTR(&qpy_ble_gatt_server_release_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_gattStart),			MP_ROM_PTR(&qpy_ble_gatt_start_obj) 				},
 	{ MP_ROM_QSTR(MP_QSTR_gattStop),			MP_ROM_PTR(&qpy_ble_gatt_stop_obj) 					},
+	{ MP_ROM_QSTR(MP_QSTR_getStatus),			MP_ROM_PTR(&qpy_ble_get_status_obj) 				},
+	//{ MP_ROM_QSTR(MP_QSTR_getConnStatus),		MP_ROM_PTR(&qpy_ble_get_conn_status_obj) 			},
 	{ MP_ROM_QSTR(MP_QSTR_setLocalName),		MP_ROM_PTR(&qpy_ble_gatt_set_local_name_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_setAdvParam),			MP_ROM_PTR(&qpy_ble_set_adv_param_obj) 				},
 	{ MP_ROM_QSTR(MP_QSTR_setAdvData),			MP_ROM_PTR(&qpy_ble_set_adv_data_obj) 				},
@@ -608,6 +1213,28 @@ STATIC const mp_rom_map_elem_t mp_module_ble_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_sendIndication),		MP_ROM_PTR(&qpy_ble_send_indication_obj) 			},
 	{ MP_ROM_QSTR(MP_QSTR_advStart),			MP_ROM_PTR(&qpy_ble_adv_start_obj) 					},
 	{ MP_ROM_QSTR(MP_QSTR_advStop),				MP_ROM_PTR(&qpy_ble_adv_stop_obj) 					},
+	
+	{ MP_ROM_QSTR(MP_QSTR_clientInit),			MP_ROM_PTR(&qpy_ble_gatt_client_init_obj) 			},
+	{ MP_ROM_QSTR(MP_QSTR_clientRelease),		MP_ROM_PTR(&qpy_ble_gatt_client_release_obj) 		},
+	{ MP_ROM_QSTR(MP_QSTR_setScanParam),		MP_ROM_PTR(&qpy_ble_set_scan_param_obj) 			},
+	{ MP_ROM_QSTR(MP_QSTR_scanStart),			MP_ROM_PTR(&qpy_ble_scan_start_obj) 				},
+	{ MP_ROM_QSTR(MP_QSTR_scanStop),			MP_ROM_PTR(&qpy_ble_scan_stop_obj) 					},
+	{ MP_ROM_QSTR(MP_QSTR_connect),				MP_ROM_PTR(&qpy_ble_connect_addr_obj) 				},
+	{ MP_ROM_QSTR(MP_QSTR_cancelConnect),		MP_ROM_PTR(&qpy_ble_cancel_connect_obj) 			},
+	{ MP_ROM_QSTR(MP_QSTR_disconnect),			MP_ROM_PTR(&qpy_ble_disconnect_obj) 				},
+	{ MP_ROM_QSTR(MP_QSTR_discoverAllService),	MP_ROM_PTR(&qpy_ble_gatt_discover_service_obj) 		},
+	{ MP_ROM_QSTR(MP_QSTR_discoverByUUID),		MP_ROM_PTR(&qpy_ble_gatt_discover_by_uuid_obj) 		},
+	{ MP_ROM_QSTR(MP_QSTR_discoverAllIncludes),	MP_ROM_PTR(&qpy_ble_gatt_discover_all_includes_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_discoverAllChara),	MP_ROM_PTR(&qpy_ble_gatt_discover_all_chara_obj) 	},
+	{ MP_ROM_QSTR(MP_QSTR_discoverAllCharaDesc),MP_ROM_PTR(&qpy_ble_gatt_discover_all_charadesc_obj)},
+	{ MP_ROM_QSTR(MP_QSTR_readCharaByUUID),		MP_ROM_PTR(&qpy_ble_gatt_read_chara_by_uuid_obj)	},
+	{ MP_ROM_QSTR(MP_QSTR_readCharaByHandle),	MP_ROM_PTR(&qpy_ble_gatt_read_chara_by_handle_obj)	},
+	{ MP_ROM_QSTR(MP_QSTR_readMultiChara),		MP_ROM_PTR(&qpy_ble_gatt_read_multi_chara_obj)		},
+	{ MP_ROM_QSTR(MP_QSTR_readCharaDesc),		MP_ROM_PTR(&qpy_ble_gatt_read_chara_desc_obj)		},
+	{ MP_ROM_QSTR(MP_QSTR_writeChara),			MP_ROM_PTR(&qpy_ble_gatt_write_chara_obj)			},
+	{ MP_ROM_QSTR(MP_QSTR_writeCharaDesc),		MP_ROM_PTR(&qpy_ble_gatt_write_chara_desc_obj)		},
+	{ MP_ROM_QSTR(MP_QSTR_writeCharaNoRsp),		MP_ROM_PTR(&qpy_ble_gatt_write_chara_norsp_obj)		},
+	
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_ble_globals, mp_module_ble_globals_table);
 

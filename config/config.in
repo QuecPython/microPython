@@ -29,9 +29,64 @@ config CAMERA
 help 
     This is camera support.
 
-config SPINAND 
-    bool "Enable spi nand flash" 
+config CAMERA_DECODE
+    bool "Enable camera decoding function"
+    depends on CAMERA
+    default n
+help 
+    This is the camera scan decoding function.
+
+config CAMERA_SAVEPHOTOS
+    bool "Enable Save photo function"
+    depends on CAMERA
+    default n
+help 
+    Realize the function of saving photos.
+
+
+config QUECTHING 
+    bool "Enable quecthing" 
     default n 
 help 
+    This supports QR code barcode decoding.
+
+config SPINAND 
+    bool "Enable spi nand flash" 
+    default n
+help 
     This is SPINANDFLASH support.
+
+choice SPINAND_FILESYSTEM
+   bool "Select nandflash file system"
+   default NANDFLASH_YAFFS2
+   depends on SPINAND
+   help
+       Select nandflash file system.
+
+config NANDFLASH_YAFFS2
+   bool "yaffs2 file system"
+config NANDFLASH_FAT
+   bool "fat file system"
+endchoice
+
+config RTMP 
+    bool "Enable rtmp" 
+    default n
+help 
+    This is rtmp support.
+
+config JPEG
+    bool "Enable jpeg" 
+    default n
+help 
+    Support JPEG and RGB conversion.
+
+config SPI_SDCARD
+    bool "Enable SPI SD Card" 
+    default n
+help 
+    Support SPI SD Card support.
+
+
+
 

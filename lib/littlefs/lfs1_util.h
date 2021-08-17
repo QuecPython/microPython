@@ -45,26 +45,39 @@ extern "C"
 // code footprint
 
 // Logging functions
+#if !defined(PLAT_RDA)
 #ifndef LFS1_NO_DEBUG
 #define LFS1_DEBUG(fmt, ...) \
     printf("lfs1 debug:%d: " fmt "\n", __LINE__, __VA_ARGS__)
 #else
 #define LFS1_DEBUG(fmt, ...)
 #endif
+#else
+#define LFS1_DEBUG(fmt, ...)
+#endif
 
+#if !defined(PLAT_RDA)
 #ifndef LFS1_NO_WARN
 #define LFS1_WARN(fmt, ...) \
     printf("lfs1 warn:%d: " fmt "\n", __LINE__, __VA_ARGS__)
 #else
 #define LFS1_WARN(fmt, ...)
 #endif
+#else
+#define LFS1_WARN(fmt, ...)
+#endif
 
+#if !defined(PLAT_RDA)
 #ifndef LFS1_NO_ERROR
 #define LFS1_ERROR(fmt, ...) \
     printf("lfs1 error:%d: " fmt "\n", __LINE__, __VA_ARGS__)
 #else
 #define LFS1_ERROR(fmt, ...)
 #endif
+#else
+#define LFS1_ERROR(fmt, ...)
+#endif
+
 
 // Runtime assertions
 #ifndef LFS1_NO_ASSERT

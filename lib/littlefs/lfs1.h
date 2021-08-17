@@ -289,6 +289,65 @@ typedef struct lfs1 {
     bool moving;
 } lfs1_t;
 
+//littlefs file operation API structures //forrest.liu@20210609 add for lfs use in kernel
+
+struct lfs1_operation {
+	lfs1_t* lfs;
+
+	struct lfs1_config block_info;
+	
+	int (*mkdir)(lfs1_t *lfs1, const char *path);
+	
+	int (*dir_open)(lfs1_t *lfs1, lfs1_dir_t *dir, const char *path);
+	
+	int (*dir_close)(lfs1_t *lfs1, lfs1_dir_t *dir);
+	
+	int (*dir_read)(lfs1_t *lfs1, lfs1_dir_t *dir, struct lfs1_info *info);
+	
+	int (*dir_seek)(lfs1_t *lfs1, lfs1_dir_t *dir, lfs1_off_t off);
+	
+	lfs1_soff_t (*dir_tell)(lfs1_t *lfs1, lfs1_dir_t *dir);
+	
+	int (*dir_rewind)(lfs1_t *lfs1, lfs1_dir_t *dir);
+	
+	int (*file_opencfg)(lfs1_t *lfs1, lfs1_file_t *file, const char *path, int flags, const struct lfs1_file_config *cfg);
+			
+	int (*file_open)(lfs1_t *lfs1, lfs1_file_t *file, const char *path, int flags);
+	
+	int (*file_close)(lfs1_t *lfs1, lfs1_file_t *file);
+	
+	int (*file_sync)(lfs1_t *lfs1, lfs1_file_t *file);
+	
+	lfs1_ssize_t (*file_read)(lfs1_t *lfs1, lfs1_file_t *file, void *buffer, lfs1_size_t size);
+	
+	lfs1_ssize_t (*file_write)(lfs1_t *lfs1, lfs1_file_t *file, const void *buffer, lfs1_size_t size);
+			
+	lfs1_soff_t (*file_seek)(lfs1_t *lfs1, lfs1_file_t *file, lfs1_soff_t off, int whence);
+	
+	int (*file_truncate)(lfs1_t *lfs1, lfs1_file_t *file, lfs1_off_t size);
+	
+	lfs1_soff_t (*file_tell)(lfs1_t *lfs1, lfs1_file_t *file);
+	
+	int (*file_rewind)(lfs1_t *lfs1, lfs1_file_t *file);
+	
+	lfs1_soff_t (*file_size)(lfs1_t *lfs1, lfs1_file_t *file);
+	
+	int (*stat)(lfs1_t *lfs1, const char *path, struct lfs1_info *info);
+	
+	int (*remove)(lfs1_t *lfs1, const char *path);
+	
+	int (*rename)(lfs1_t *lfs1, const char *oldpath, const char *newpath);
+
+	int (*traverse)(lfs1_t *lfs1, int (*cb)(void*, lfs1_block_t), void *data);
+	
+	int (*format)(lfs1_t *lfs1, const struct lfs1_config *cfg);
+	
+	int (*mount)(lfs1_t *lfs1, const struct lfs1_config *cfg);
+	
+	int (*unmount)(lfs1_t *lfs1);
+};
+
+extern struct lfs1_operation lfs1_ops;
 
 /// Filesystem functions ///
 

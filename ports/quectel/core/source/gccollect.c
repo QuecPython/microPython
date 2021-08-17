@@ -59,14 +59,17 @@ void gc_collect(void) {
     // start the GC
     gc_collect_start();
 
-    // get the registers and the sp
-    //uintptr_t regs[10];
-    //uintptr_t sp = gc_helper_get_regs_and_sp(regs);
-    uintptr_t sp = (uintptr_t)ReadSP();
+    //非python线程不能回收当前线程的资源，会触发死机
+    if(mp_is_python_thread())
+    {
+        // get the registers and the sp
+        //uintptr_t regs[10];
+        //uintptr_t sp = gc_helper_get_regs_and_sp(regs);
+        uintptr_t sp = (uintptr_t)ReadSP();
 
-    // trace the stack, including the registers (since they live on the stack in this function)
-    gc_collect_root((void **)sp, ((uint32_t)MP_STATE_THREAD(stack_top) - sp) / sizeof(uint32_t));
-
+        // trace the stack, including the registers (since they live on the stack in this function)
+        gc_collect_root((void **)sp, ((uint32_t)MP_STATE_THREAD(stack_top) - sp) / sizeof(uint32_t));
+    }
     // trace root pointers from any threads
     #if MICROPY_PY_THREAD
     mp_thread_gc_others();

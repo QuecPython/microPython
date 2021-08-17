@@ -22,6 +22,7 @@
 #include "helios_debug.h"
 #include "helios_sim.h"
 
+#define QPY_MODSIM_LOG(msg, ...)      custom_log("SIM", msg, ##__VA_ARGS__)
 
 /*=============================================================================*/
 /* FUNCTION: qpy_sim_get_imsi                                                  */
@@ -64,7 +65,7 @@ STATIC mp_obj_t qpy_sim_get_iccid(void)
 	uint8_t status = 0;
 	int ret = 0;
 
-	ret = Helios_SIM_GetCardStatus(0, &status);
+	ret = Helios_SIM_GetCardStatus(0, (Helios_SIM_Status_e *)&status);
 	if (ret == 0)
 	{
 		if (status != 1)
@@ -476,6 +477,68 @@ STATIC mp_obj_t qpy_sim_write_phonebook_record(size_t n_args, const mp_obj_t *ar
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_sim_write_phonebook_record_obj, 3, 4, qpy_sim_write_phonebook_record);
 #endif
 
+STATIC mp_obj_t qpy_sim_set_simdet(const mp_obj_t obj_detenable, const mp_obj_t obj_insertlevel)
+{
+	int ret = 0;
+	int detenable = mp_obj_get_int(obj_detenable);
+    int insertlevel = mp_obj_get_int(obj_insertlevel);
+
+	if (detenable != 0 && detenable != 1)
+        mp_raise_ValueError("invalid value, detenable should be in (0,1).");
+    if (insertlevel != 0 && insertlevel != 1)
+        mp_raise_ValueError("invalid value, insertlevel should be in (0,1).");
+
+    ret = Helios_SIM_SetSimDet(0, detenable, insertlevel);
+    if (ret == 0)
+	{
+		return mp_obj_new_int(ret);
+	}
+	
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sim_set_simdet_obj, qpy_sim_set_simdet);
+
+STATIC mp_obj_t qpy_sim_get_simdet(void)
+{
+	int ret = 0;
+	int detenable = 99;
+    int insertlevel = 99;
+
+    ret = Helios_SIM_GetSimDet(0, &detenable, &insertlevel);
+    if (ret == 0)
+	{
+	    mp_obj_t tuple[2] = 
+		{
+			mp_obj_new_int(detenable),
+			mp_obj_new_int(insertlevel),
+		};
+		return mp_obj_new_tuple(2, tuple);
+	}
+	
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_simdet_obj, qpy_sim_get_simdet);
+
+static mp_obj_t g_sim_user_callback;
+
+static void qpy_sim_event_handler(uint8_t sim_id, unsigned int event_id, void *ctx)
+{
+	if(g_sim_user_callback)
+	{
+	    QPY_MODSIM_LOG("[SIM] callback start.\r\n");
+	    mp_sched_schedule(g_sim_user_callback, mp_obj_new_int(event_id));
+	    QPY_MODSIM_LOG("[SIM] callback end.\r\n");
+	}
+}
+
+STATIC mp_obj_t qpy_sim_add_event_handler(mp_obj_t handler)
+{
+	g_sim_user_callback = handler;
+	Helios_SIM_Add_Event_Handler(qpy_sim_event_handler);
+	
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_sim_add_event_handler_obj, qpy_sim_add_event_handler);
 
 STATIC const mp_rom_map_elem_t mp_module_sim_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), 		MP_ROM_QSTR(MP_QSTR_sim) 			},
@@ -492,6 +555,9 @@ STATIC const mp_rom_map_elem_t mp_module_sim_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_readPhonebook), MP_ROM_PTR(&qpy_sim_read_phonebook_record_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_writePhonebook), MP_ROM_PTR(&qpy_sim_write_phonebook_record_obj) },
 #endif
+    { MP_ROM_QSTR(MP_QSTR_setSimDet),      MP_ROM_PTR(&qpy_sim_set_simdet_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getSimDet),      MP_ROM_PTR(&qpy_sim_get_simdet_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setCallback),    MP_ROM_PTR(&qpy_sim_add_event_handler_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_sim_globals, mp_module_sim_globals_table);
 

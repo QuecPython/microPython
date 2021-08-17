@@ -159,6 +159,10 @@ MP_DEFINE_CONST_FUN_OBJ_0(time_time_obj, time_time);
 STATIC mp_obj_t time_set_timezone(mp_obj_t tz)
 {
 	int offset = mp_obj_get_int(tz);
+	if ((offset < -12) || (offset > 12))
+	{
+		mp_raise_ValueError("invalid value, timezone should be in [-12, +12].");
+	}
 	Helios_RTC_SetTimeZoneOffset(offset);
 	return mp_obj_new_int(0);
 }

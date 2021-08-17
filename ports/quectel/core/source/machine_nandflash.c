@@ -26,6 +26,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "stat.h"
+
+
 #include "runtime.h"
 #include "gc.h"
 #include "mphal.h"
@@ -35,6 +38,11 @@
 #include "modmachine.h"
 
 #include "helios_flash.h"
+#include "yaffsfs.h"
+#include "vfs.h"
+#include "helios_debug.h"
+
+#define NANDFLASH_LOG(msg, ...)      custom_log("nand", msg, ##__VA_ARGS__)
 
 
 const mp_obj_type_t machine_nandflash_type;
@@ -47,26 +55,125 @@ typedef struct machine_nandflash_obj_struct {
 
 static machine_nandflash_obj_t *self_nandflash = NULL;
 
+extern int yaffsVfsMount(const char *base_path, 
+                 size_t cache_count, size_t sfile_reserved_lb,
+                 bool read_only);
 
 STATIC mp_obj_t machine_nandflash_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args)
 {
-	if(self_nandflash && self_nandflash->is_init) 
-		mp_raise_ValueError("nand flash has been initialized");
 
 	if(!self_nandflash) {
     	self_nandflash = m_new_obj(machine_nandflash_obj_t);
 	    self_nandflash->base.type = &machine_nandflash_type;
 	}
 	
-    self_nandflash->is_init = 0;
 
-	if(Helios_NandFlash_Init() != 0) {
-		mp_raise_ValueError("nand flash initialization failed");
+#ifdef CONFIG_NANDFLASH_YAFFS2
+	if(self_nandflash->is_init == 0) {
+		if(yaffsVfsMount("/", 10000, 0,0) != 0){
+			mp_raise_ValueError("nand flash initialization failed");
+		}
 	}
+#else
+	mp_raise_ValueError("Fat file system is not supported");
+#endif
 	self_nandflash->is_init = 1;
 	return MP_OBJ_FROM_PTR(self_nandflash);
 }
 
+
+
+#define FILE_OPEN_FLAGS_R		(O_RDONLY)
+#define FILE_OPEN_FLAGS_W		(O_WRONLY | O_CREAT | O_TRUNC)
+#define FILE_OPEN_FLAGS_A		(O_WRONLY | O_CREAT | O_APPEND)
+#define FILE_OPEN_FLAGS_RPluse	(O_RDWR)
+#define FILE_OPEN_FLAGS_WPluse	(O_RDWR | O_CREAT | O_TRUNC)
+#define FILE_OPEN_FLAGS_APluse	(O_RDWR | O_CREAT | O_APPEND)
+
+static int Helios_file_open_mode2flags(const char * mode)
+{
+	int mode_len = 0;
+
+	if(mode == NULL) return -1;
+
+	mode_len = strlen(mode);
+	
+	if(mode_len == 1)
+	{
+		if(mode[0] == 'r') return FILE_OPEN_FLAGS_R;
+		if(mode[0] == 'w') return FILE_OPEN_FLAGS_W;
+		if(mode[0] == 'a') return FILE_OPEN_FLAGS_A;
+		
+		return -1;
+	}
+	else if(mode_len == 2)
+	{
+		char *r_chr = NULL, *w_chr = NULL, *a_chr = NULL;
+		char *b_chr = NULL, *t_chr = NULL;
+		char *plus_chr = NULL;
+		int rwa_cnt = 0, btplus_cnt = 0;
+
+		r_chr = strchr(mode, 'r');
+		w_chr = strchr(mode, 'w');
+		a_chr = strchr(mode, 'a');
+		if(r_chr) rwa_cnt++;
+		if(w_chr) rwa_cnt++;
+		if(a_chr) rwa_cnt++;
+		if(rwa_cnt != 1) return -1;
+
+		b_chr = strchr(mode, 'b');
+		t_chr = strchr(mode, 't');
+		plus_chr = strchr(mode, '+');
+		if(b_chr) btplus_cnt++;
+		if(t_chr) btplus_cnt++;
+		if(plus_chr) btplus_cnt++;
+		if(btplus_cnt != 1) return -1;
+
+		if(plus_chr)
+		{
+			if(r_chr) return FILE_OPEN_FLAGS_RPluse;
+			if(w_chr) return FILE_OPEN_FLAGS_WPluse;
+			if(a_chr) return FILE_OPEN_FLAGS_APluse;
+		}
+		else
+		{
+			if(r_chr) return FILE_OPEN_FLAGS_R;
+			if(w_chr) return FILE_OPEN_FLAGS_W;
+			if(a_chr) return FILE_OPEN_FLAGS_A;
+		}
+	}
+	else if(mode_len == 3)
+	{
+		char *r_chr = NULL, *w_chr = NULL, *a_chr = NULL;
+		char *b_chr = NULL, *t_chr = NULL;
+		char *plus_chr = NULL;
+		int rwa_cnt = 0, bt_cnt = 0, plus_cnt = 0;
+
+		r_chr = strchr(mode, 'r');
+		w_chr = strchr(mode, 'w');
+		a_chr = strchr(mode, 'a');
+		if(r_chr) rwa_cnt++;
+		if(w_chr) rwa_cnt++;
+		if(a_chr) rwa_cnt++;
+		if(rwa_cnt != 1) return -1;
+
+		b_chr = strchr(mode, 'b');
+		t_chr = strchr(mode, 't');
+		if(b_chr) bt_cnt++;
+		if(t_chr) bt_cnt++;
+		if(bt_cnt != 1) return -1;
+
+		plus_chr = strchr(mode, '+');
+		if(plus_chr) plus_cnt++;
+		if(plus_cnt != 1) return -1;
+
+		if(r_chr) return FILE_OPEN_FLAGS_RPluse;
+		if(w_chr) return FILE_OPEN_FLAGS_WPluse;
+		if(a_chr) return FILE_OPEN_FLAGS_APluse;
+	}
+
+	return -1;
+}
 
 
 STATIC const mp_arg_t machine_nandflash_open_allowed_args[] = {
@@ -85,10 +192,11 @@ STATIC mp_obj_t machine_nandflash_open(size_t n_args, const mp_obj_t *pos_args, 
 
 	char *filename_ptr = (char *)mp_obj_str_get_str(args[ARG_filename].u_obj);
 	char *fmode = (char *)mp_obj_str_get_str(args[ARG_mode].u_obj);
-	printf("machine name = %s, mode = %s\n",filename_ptr, fmode);
-	int ret = Helios_NandFlash_fopen(filename_ptr, fmode);
-	printf("machine ret = %d\n",ret);
-
+	
+	unsigned long oflag = Helios_file_open_mode2flags(fmode);
+	
+	int ret = vfs_open(filename_ptr, oflag);
+	
     return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_nandflash_open_obj, 1, machine_nandflash_open);
@@ -101,10 +209,11 @@ STATIC mp_obj_t machine_nandflash_close(mp_obj_t self_in, mp_obj_t stream)
 	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
 
 	unsigned int stream_id = mp_obj_get_int(stream);
+	
+    int res;
+	res = vfs_close(stream_id);
 
-	int ret = Helios_NandFlash_fclose(stream_id);
-
-    return mp_obj_new_int(ret);
+    return mp_obj_new_int(res);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_close_obj, machine_nandflash_close);
 
@@ -135,9 +244,15 @@ STATIC mp_obj_t machine_nandflash_read(size_t n_args, const mp_obj_t *pos_args, 
 	
 	int strem_id = args[ARG_stream].u_int;
 
-	int ret = Helios_NandFlash_fread((void*) bufinfo.buf, 1, length, strem_id);
+    int res;
+    res = vfs_read(strem_id,(void*) bufinfo.buf, length);
+    if(res < 0)
+    {
+        mp_raise_ValueError("vfs_read faile\n");
+    }
 
-	return mp_obj_new_int(ret);
+
+	return mp_obj_new_int(res);
 	
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_nandflash_read_obj, 1, machine_nandflash_read);
@@ -165,8 +280,8 @@ STATIC mp_obj_t machine_nandflash_write(size_t n_args, const mp_obj_t *pos_args,
 	int length = (size_t)args[ARG_datasize].u_int > bufinfo.len ? bufinfo.len : (size_t)args[ARG_datasize].u_int;
 
 	int strem_id = args[ARG_stream].u_int;
-
-	int ret = Helios_NandFlash_fwrite((void*) bufinfo.buf, 1, length, strem_id);
+	
+    int ret = vfs_write(strem_id, (void*) bufinfo.buf, length);
 
 	return mp_obj_new_int(ret);
 }
@@ -190,8 +305,8 @@ STATIC mp_obj_t machine_nandflash_seek(size_t n_args, const mp_obj_t *pos_args, 
 	int offset = (size_t)args[ARG_offset].u_int;
 	int strem_id = args[ARG_stream].u_int;
 	int wherefrom = args[ARG_wherefrom].u_int;
-
-	int ret = Helios_NandFlash_fseek(strem_id, offset, wherefrom);
+	
+	int ret = vfs_lseek(strem_id, offset, wherefrom);
 
 	return mp_obj_new_int(ret);
 }
@@ -205,7 +320,7 @@ STATIC mp_obj_t machine_nandflash_remove(mp_obj_t self_in, mp_obj_t filename)
 
 	char* name = (char *)mp_obj_str_get_str(filename);
 
-	int ret = Helios_NandFlash_fremove(name);
+	int ret = vfs_unlink(name);
 
     return mp_obj_new_int(ret);
 }
@@ -222,7 +337,7 @@ STATIC mp_obj_t machine_nandflash_rename(mp_obj_t self_in, mp_obj_t oldname, mp_
 	
 	char* new_name = (char *)mp_obj_str_get_str(newname);
 
-	int ret = Helios_NandFlash_frename(old_name, new_name);
+	int ret = vfs_rename(old_name, new_name);
 
     return mp_obj_new_int(ret);
 }
@@ -232,11 +347,14 @@ STATIC mp_obj_t machine_nandflash_filesize(mp_obj_t self_in, mp_obj_t filename)
 {
 	
     machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
-	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
+ 	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
 
 	char* name = (char *)mp_obj_str_get_str(filename);
 
-    return mp_obj_new_int(Helios_NandFlash_fsize(name));
+	struct stat st = {0};
+	if(-1 == vfs_stat(name, &st)) return mp_obj_new_int(-1);
+
+    return mp_obj_new_int(st.st_size);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_filesize_obj, machine_nandflash_filesize);
 
@@ -248,7 +366,7 @@ STATIC mp_obj_t machine_nandflash_mkdir(mp_obj_t self_in, mp_obj_t dirname)
 
 	char* name = (char *)mp_obj_str_get_str(dirname);
 
-    return mp_obj_new_int(Helios_NandFlash_fmkdir(name));
+    return mp_obj_new_int(vfs_mkdir(name,0));
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_mkdir_obj, machine_nandflash_mkdir);
 
@@ -260,7 +378,7 @@ STATIC mp_obj_t machine_nandflash_rmdir(mp_obj_t self_in, mp_obj_t dirname)
 
 	char* name = (char *)mp_obj_str_get_str(dirname);
 
-    return mp_obj_new_int(Helios_NandFlash_frmdir(name));
+    return mp_obj_new_int(vfs_rmdir(name));
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_rmdir_obj, machine_nandflash_rmdir);
 
@@ -272,110 +390,163 @@ STATIC mp_obj_t machine_nandflash_SetCurrentDir(mp_obj_t self_in, mp_obj_t dirna
 
 	char* name = (char *)mp_obj_str_get_str(dirname);
 
-    return mp_obj_new_int(Helios_NandFlash_SetCurrentDir(name));
+	
+	struct stat st = {0};
+	//if(-1 == vfs_stat(name, &st) || st.st_mode != S_IFDIR) return mp_obj_new_int(-1);
+	if(-1 == vfs_stat(name, &st)) return mp_obj_new_int(-1);
+
+	NANDFLASH_LOG("st mode = %d\n",st.st_mode);
+
+    return mp_obj_new_int(vfs_chdir(name));
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_chdir_obj, machine_nandflash_SetCurrentDir);
 
 
-STATIC mp_obj_t machine_nandflash_GetCurrentDir(mp_obj_t self_in, mp_obj_t dirname, mp_obj_t maxlen)
+STATIC mp_obj_t machine_nandflash_GetCurrentDir(mp_obj_t self_in)
 {
 	
     machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
+	char dir_str[50] = {0};
 
-	char* name = (char *)mp_obj_str_get_str(dirname);
-	int MaxLen = mp_obj_get_int(maxlen);
-	char *ret = Helios_NandFlash_GetCurrentDir(name,MaxLen);
+	char *ret = vfs_getcwd(dir_str,50);
 
     return mp_obj_new_str(ret,strlen(ret));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(machine_nandflash_getcwd_obj, machine_nandflash_GetCurrentDir);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_nandflash_getcwd_obj, machine_nandflash_GetCurrentDir);
 
 
 STATIC mp_obj_t machine_nandflash_freesize(mp_obj_t self_in)
 {
-	
+	unsigned int  free_size;
     machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
+	
+	int err = 0;
+	struct statvfs vfs_state = {0};
+	err = vfs_statvfs("/", &vfs_state);
+	if(err < 0)
+	{
+		return mp_obj_new_int(-1);
+	}
+	free_size = (vfs_state.f_bsize) * (vfs_state.f_bavail);
 
-    return mp_obj_new_int_from_uint(Helios_NandFlash_FreeSize());
+    return mp_obj_new_int_from_uint(free_size);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_nandflash_freesize_obj, machine_nandflash_freesize);
 
 
-
-STATIC mp_obj_t machine_nandflash_findfirst(mp_obj_t self_in, mp_obj_t dirname)
+STATIC mp_obj_t machine_nandflash_format(mp_obj_t self_in)
 {
 	
     machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
+    return mp_obj_new_int(vfs_format("/"));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_nandflash_format_obj, machine_nandflash_format);
 
-	char* name = (char *)mp_obj_str_get_str(dirname);
-	NANDFILE_INFO fileinfo = {0};
+#define HELIOS_LISTDIR_LEN 10*1024
+
+char list_dir[HELIOS_LISTDIR_LEN] = {0};
+
+static int Helios_vfs_ListDir(const char *dir_ptr, char* fileinfo_ptr) {
+	struct dirent *de;
+	char* file_dir_list = fileinfo_ptr;
 	
-	if(Helios_NandFlash_FindFirst(name, &fileinfo) != 0) {
-		return mp_obj_new_int(-1);
+
+	int fd = vfs_open(dir_ptr ,O_RDONLY, 0);
+	if(fd < 0)
+	{
+		NANDFLASH_LOG("open of dir failed\n");
+		return -1;
+	}
+	else
+	{
+
+		while((de = vfs_readdir_fd(fd)) != NULL)
+		{
+			if(de->d_name) {
+				if(strlen(file_dir_list) + strlen(de->d_name) > HELIOS_LISTDIR_LEN-1) {
+					mp_raise_ValueError("Too many catalog files to display");
+					break;
+				}
+				sprintf(file_dir_list,"%s %s",file_dir_list,de->d_name);
+				NANDFLASH_LOG("%s type %d \n",de->d_name,de->d_type);
+			}
+		}
+
+		vfs_close(fd);
+		NANDFLASH_LOG("file_dir_list = %s \n",file_dir_list);
 	}
 
-	mp_obj_t file_info[12] = {
-		mp_obj_new_str(fileinfo.file_name, strlen(fileinfo.file_name)),
-		mp_obj_new_int(fileinfo.time),
-		mp_obj_new_int(fileinfo.date),
-		mp_obj_new_int(fileinfo.size),
-		mp_obj_new_int(fileinfo.owner_id),
-		mp_obj_new_int(fileinfo.group_id),
-		mp_obj_new_int(fileinfo.permissions),
-		mp_obj_new_int(fileinfo.data_id),
-		mp_obj_new_int(fileinfo.plr_id),
-		mp_obj_new_int(fileinfo.plr_time),
-		mp_obj_new_int(fileinfo.plr_date),
-		mp_obj_new_int(fileinfo.plr_size),
-	};
-	
-    return mp_obj_new_list(12, file_info);
+	return 0;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_findfirst_obj, machine_nandflash_findfirst);
 
-STATIC mp_obj_t machine_nandflash_findnext(mp_obj_t self_in)
+
+STATIC mp_obj_t machine_nandflash_listdir(size_t n_args, const mp_obj_t *args)
 {
-	
-    machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
-	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
 
-	NANDFILE_INFO fileinfo = {0};
+    machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
 	
-	if(Helios_NandFlash_FindNext(&fileinfo) != 0) {
-		return mp_obj_new_int(-1);
+	int ret = 0;
+	char dir_str[256] = {0};
+
+	memset(list_dir, 0, HELIOS_LISTDIR_LEN);
+	/*if(list_dir == NULL) {
+		list_dir = calloc(1,HELIOS_LISTDIR_LEN);
+		if(list_dir == NULL) return mp_obj_new_int(-1);
+	}
+	memset(list_dir, 0, HELIOS_LISTDIR_LEN);*/
+	
+	if(n_args == 1) {
+		char *data = vfs_getcwd(dir_str,256);
+		NANDFLASH_LOG("listdir = %s\n",data);
+		ret = Helios_vfs_ListDir(data,list_dir);
+	} else if(n_args == 2) {
+		char* dir_name = (char *)mp_obj_str_get_str(args[1]);
+		ret = Helios_vfs_ListDir(dir_name, list_dir);
+	} else {
+		mp_raise_ValueError("wrong number of parameters");
 	}
 
-	mp_obj_t file_info[12] = {
-		mp_obj_new_str(fileinfo.file_name, strlen(fileinfo.file_name)),
-		mp_obj_new_int(fileinfo.time),
-		mp_obj_new_int(fileinfo.date),
-		mp_obj_new_int(fileinfo.size),
-		mp_obj_new_int(fileinfo.owner_id),
-		mp_obj_new_int(fileinfo.group_id),
-		mp_obj_new_int(fileinfo.permissions),
-		mp_obj_new_int(fileinfo.data_id),
-		mp_obj_new_int(fileinfo.plr_id),
-		mp_obj_new_int(fileinfo.plr_time),
-		mp_obj_new_int(fileinfo.plr_date),
-		mp_obj_new_int(fileinfo.plr_size),
-	};
+	if(ret != 0) return mp_obj_new_int(-1);
 	
-    return mp_obj_new_list(12, file_info);
+    return mp_obj_new_str(list_dir, strlen(list_dir));
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_nandflash_findnext_obj, machine_nandflash_findnext);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_nandflash_listdir_obj, 1, 2, machine_nandflash_listdir);
 
-STATIC mp_obj_t machine_nandflash_fromat(mp_obj_t self_in)
+STATIC mp_obj_t machine_nandflash_exist(mp_obj_t self_in, mp_obj_t filename)
 {
 	
     machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
-	
-    return mp_obj_new_int(Helios_NandFlash_Fromat());
+
+	char* name = (char *)mp_obj_str_get_str(filename);
+
+	struct stat st = {0};
+	if(-1 == vfs_stat(name, &st)) return mp_obj_new_int(0);
+
+    return mp_obj_new_int(1);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_nandflash_fromat_obj, machine_nandflash_fromat);
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_exist_obj, machine_nandflash_exist);
+
+STATIC mp_obj_t machine_nandflash_sync(mp_obj_t self_in, mp_obj_t filename)
+{
+	
+    machine_nandflash_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	if(self->is_init == 0) mp_raise_ValueError("nand flash is not initialized");
+
+	char* name = (char *)mp_obj_str_get_str(filename);
+
+	struct stat st = {0};
+	if(-1 == vfs_stat(name, &st)) return mp_obj_new_int(-1);
+
+	if(-1 == vfs_sync(name)) return mp_obj_new_int(-1);
+
+    return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_nandflash_sync_obj, machine_nandflash_sync);
 
 
 STATIC const mp_rom_map_elem_t nandflash_locals_dict_table[] = {
@@ -392,10 +563,11 @@ STATIC const mp_rom_map_elem_t nandflash_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_getcwd), MP_ROM_PTR(&machine_nandflash_getcwd_obj) },
     { MP_ROM_QSTR(MP_QSTR_chdir), MP_ROM_PTR(&machine_nandflash_chdir_obj) },
     { MP_ROM_QSTR(MP_QSTR_freesize), MP_ROM_PTR(&machine_nandflash_freesize_obj) },
-    { MP_ROM_QSTR(MP_QSTR_findfirst), MP_ROM_PTR(&machine_nandflash_findfirst_obj) },
-    { MP_ROM_QSTR(MP_QSTR_findnext), MP_ROM_PTR(&machine_nandflash_findnext_obj) },
-    { MP_ROM_QSTR(MP_QSTR_fromat), MP_ROM_PTR(&machine_nandflash_fromat_obj) },
-
+    { MP_ROM_QSTR(MP_QSTR_format), MP_ROM_PTR(&machine_nandflash_format_obj) },
+    { MP_ROM_QSTR(MP_QSTR_listdir), MP_ROM_PTR(&machine_nandflash_listdir_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_exist), MP_ROM_PTR(&machine_nandflash_exist_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_sync), MP_ROM_PTR(&machine_nandflash_sync_obj) },
+	
 };
 
 STATIC MP_DEFINE_CONST_DICT(nandflash_locals_dict, nandflash_locals_dict_table);

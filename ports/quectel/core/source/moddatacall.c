@@ -234,6 +234,19 @@ STATIC mp_obj_t qpy_datacall_get_info(size_t n_args, const mp_obj_t *args)
 	char ip6_sec_dns[64] = {0};
 	Helios_DataCallInfoStruct info = {0};
 	
+	if ((profile_id < (int)HELIOS_PROFILE_IDX_MIN) || (profile_id > (int)HELIOS_PROFILE_IDX_MAX))
+	{
+#if defined (PLAT_ASR)
+		mp_raise_ValueError("invalid value, profileIdx should be in [1,8].");
+#elif defined (PLAT_Unisoc)
+		mp_raise_ValueError("invalid value, profileIdx should be in [1,7].");
+#endif
+	}
+	if ((ip_type < 0) || (ip_type > 2))
+	{
+		mp_raise_ValueError("invalid value, ipTpye should be in [0,2].");
+	}
+	
 	ret = Helios_DataCall_GetInfo(profile_id, 0, &info);
 	if (0 == ret)
 	{
@@ -337,6 +350,19 @@ STATIC mp_obj_t qpy_datacall_register_usr_callback(mp_obj_t callback)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_register_usr_callback_obj, qpy_datacall_register_usr_callback);
 
+STATIC mp_obj_t qpy_datacall_get_pdp_range(void)
+{	
+	uint32_t min = Helios_DataCall_GetProfileIdxMin();
+	uint32_t max = Helios_DataCall_GetProfileIdxMax();
+	mp_obj_t tuple[2] = 
+	{
+		mp_obj_new_int(min),
+		mp_obj_new_int(max)
+	};
+		
+	return mp_obj_new_tuple(2, tuple);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_get_pdp_range_obj, qpy_datacall_get_pdp_range);
 
 
 
@@ -348,6 +374,7 @@ STATIC const mp_rom_map_elem_t mp_module_datacall_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_setCallback),		MP_ROM_PTR(&qpy_register_usr_callback_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_recordApn),		MP_ROM_PTR(&qpy_datacall_record_apn_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setAsynMode),		MP_ROM_PTR(&qpy_datacall_set_asynmode_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getPdpRange),		MP_ROM_PTR(&qpy_get_pdp_range_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_datacall_globals, mp_module_datacall_globals_table);
 

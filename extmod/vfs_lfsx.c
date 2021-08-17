@@ -42,6 +42,7 @@
 #endif
 #include "helios_debug.h"
 #include "helios_flash.h"
+#include "helios_fs.h"
 
 #if 0
 #define QUEC_QPY_LFS_LOG(msg, ...)  custom_log(QPY_LFS, msg, ##__VA_ARGS__)
@@ -215,13 +216,33 @@ STATIC mp_obj_t MP_VFS_LFSx(make_new)(const mp_obj_type_t * type, size_t n_args,
 #endif
     int ret = LFSx_API(mount)(&self->lfs, &self->config);
     if(ret < 0) {
-    	QUEC_QPY_LFS_LOG("mount fail! ret = %d", ret);
+    	QUEC_QPY_LFS_LOG("mount fail! start format...ret = %d", ret);
 		ret = LFSx_API(format)(&self->lfs, &self->config);
+		if(ret < 0)
+		{
+			QUEC_QPY_LFS_LOG("format fail! ret = %d", ret);
+			mp_raise_OSError(-ret);
+		}
+		ret = LFSx_API(mount)(&self->lfs, &self->config);
     }
 
     if (ret < 0) {
+		QUEC_QPY_LFS_LOG("mount again fail! ret = %d", ret);
         mp_raise_OSError(-ret);
     }
+	
+	//forrest.liu@20210609 add for lfs use in kernel
+#if defined(PLAT_Unisoc)
+	if(strcmp(src_data, "customer_fs") == 0)
+	{
+		lfs1_ops.lfs = &self->lfs;
+		lfs1_ops.block_info.block_size = self->config.block_size;
+		lfs1_ops.block_info.block_count = self->config.block_count;
+		Helios_lfs_register(&lfs1_ops);
+		Helios_lfs_mount("/usr");
+	}
+#endif
+	
     return MP_OBJ_FROM_PTR(self);
 }
 

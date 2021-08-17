@@ -53,6 +53,8 @@ class Response:
                     s_isopen = False
                     break
         except Exception as e:
+            s.close() # 2021-05-27
+            s_isopen = False
             pass
         return ""
 

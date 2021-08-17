@@ -72,7 +72,7 @@ STATIC mp_obj_t Helios_adc_read(mp_obj_t self_in, mp_obj_t adc_channel)
 {
 	int ret = -1;
 	int channel = mp_obj_get_int(adc_channel);
-	if ((channel == 0) || (channel == 1)|| (channel == 2))
+	if ((channel == 0) || (channel == 1) || (channel == 2) || (channel == 3))
 	{
 		unsigned int chl = channel;
 		//ret = ql_adc_read(chl, &batvol);

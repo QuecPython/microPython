@@ -269,11 +269,16 @@ STATIC void gc_sweep(void) {
     #endif
     // free unmarked heads and their tails
     int free_tail = 0;
+    bool is_python_thread = mp_is_python_thread();
     for (size_t block = 0; block < MP_STATE_MEM(gc_alloc_table_byte_len) * BLOCKS_PER_ATB; block++) {
         switch (ATB_GET_KIND(block)) {
             case AT_HEAD:
                 #if MICROPY_ENABLE_FINALISER
                 if (FTB_GET(block)) {
+                    //非python线程不能调用python方法
+                	if(false == is_python_thread) {
+                		break;
+                	}
                     mp_obj_base_t *obj = (mp_obj_base_t *)PTR_FROM_BLOCK(block);
                     if (obj->type != NULL) {
                         // if the object has a type then see if it has a __del__ method
