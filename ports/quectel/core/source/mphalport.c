@@ -40,7 +40,7 @@
 STATIC uint8_t stdin_ringbuf_array[256];
 ringbuf_t stdin_ringbuf = {stdin_ringbuf_array, sizeof(stdin_ringbuf_array), 0, 0};
 
-static Helios_Sem_t mp_hal_stdin_sem = 0;
+//static Helios_Sem_t mp_hal_stdin_sem = 0;
 #if !defined(PLAT_RDA)
 #define QUECPYTHON_CALLBACK_MSG_MAX_NUM 50
 static Helios_MsgQ_t quecpython_callback_deal_queue = 0;
@@ -103,8 +103,9 @@ int mp_hal_stdin_rx_chr(void)
 
         //Helios_Semaphore_Acquire(mp_hal_stdin_sem, 10);
         //forrest.liu@20210809 add for quecpython task repl using waiting msg
+        MP_THREAD_GIL_EXIT();
 		Helios_MsgQ_Get(mp_hal_stdin_msg, (mp_uint_t*)&msg, sizeof(msg), HELIOS_WAIT_FOREVER);
-
+        MP_THREAD_GIL_ENTER();
         MICROPY_EVENT_POLL_HOOK
     }
 }
