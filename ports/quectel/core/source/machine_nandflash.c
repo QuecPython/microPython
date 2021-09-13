@@ -38,8 +38,7 @@
 #include "modmachine.h"
 
 #include "helios_flash.h"
-#include "yaffsfs.h"
-#include "vfs.h"
+#include "fs_vfs.h"
 #include "helios_debug.h"
 
 #define NANDFLASH_LOG(msg, ...)      custom_log("nand", msg, ##__VA_ARGS__)
@@ -83,12 +82,12 @@ STATIC mp_obj_t machine_nandflash_make_new(const mp_obj_type_t *type, size_t n_a
 
 
 
-#define FILE_OPEN_FLAGS_R		(O_RDONLY)
-#define FILE_OPEN_FLAGS_W		(O_WRONLY | O_CREAT | O_TRUNC)
-#define FILE_OPEN_FLAGS_A		(O_WRONLY | O_CREAT | O_APPEND)
-#define FILE_OPEN_FLAGS_RPluse	(O_RDWR)
-#define FILE_OPEN_FLAGS_WPluse	(O_RDWR | O_CREAT | O_TRUNC)
-#define FILE_OPEN_FLAGS_APluse	(O_RDWR | O_CREAT | O_APPEND)
+#define FILE_OPEN_FLAGS_R		(YAFFS_RDONLY)
+#define FILE_OPEN_FLAGS_W		(YAFFS_WRONLY | YAFFS_CREAT | YAFFS_TRUNC)
+#define FILE_OPEN_FLAGS_A		(YAFFS_WRONLY | YAFFS_CREAT | YAFFS_APPEND)
+#define FILE_OPEN_FLAGS_RPluse	(YAFFS_RDWR)
+#define FILE_OPEN_FLAGS_WPluse	(YAFFS_RDWR | YAFFS_CREAT | YAFFS_TRUNC)
+#define FILE_OPEN_FLAGS_APluse	(YAFFS_RDWR | YAFFS_CREAT | YAFFS_APPEND)
 
 static int Helios_file_open_mode2flags(const char * mode)
 {
@@ -454,7 +453,7 @@ static int Helios_vfs_ListDir(const char *dir_ptr, char* fileinfo_ptr) {
 	char* file_dir_list = fileinfo_ptr;
 	
 
-	int fd = vfs_open(dir_ptr ,O_RDONLY, 0);
+	int fd = vfs_open(dir_ptr ,YAFFS_RDONLY, 0);
 	if(fd < 0)
 	{
 		NANDFLASH_LOG("open of dir failed\n");
