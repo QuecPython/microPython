@@ -53,7 +53,7 @@ WHEN		WHO			WHAT,WHERE,WHY
 #define OPEN_PREVIEW_AND_DECODE 1
 const mp_obj_type_t camera_scandecode_type;
 
-static mp_obj_t callback_cur = NULL;
+static c_callback_t *callback_cur = NULL;
 
 static Helios_CAMConfig camconfig = {0};
 
@@ -74,9 +74,12 @@ typedef struct _preview_obj_t {
 	unsigned char prebufcnt;
 	unsigned char perview;
 	unsigned char decbufcnt;
-	mp_obj_t callback;
+	c_callback_t *callback;
 	//int  inited;
 } preview_obj_t;
+
+static preview_obj_t *scandecode_obj = NULL;
+
 
 zbar_image_scanner_t *scanner = NULL;
 
@@ -125,9 +128,9 @@ zbar_image_scanner_t *scanner = NULL;
 				   mp_obj_new_int(0),
 				   mp_obj_new_str((char*)data,strlen((char*)data)),
 				};
-			   if(mp_obj_is_callable(callback_cur)){
-				   mp_sched_schedule(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(2, decode_cb)));
-			   }
+
+		        mp_sched_schedule_ex(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(2, decode_cb)));
+
 		   }
 			
 		}
@@ -194,8 +197,12 @@ STATIC mp_obj_t scandecode_make_new(const mp_obj_type_t *type, size_t n_args, si
 
 	SCANDE_LOG("data camwidth etc = %d,%d,%d,%d,%d\n",camwidth,camheight,lcdprewidth,lcdpreheight,prebufcnt);
 
+	if(scandecode_obj == NULL) 
+	{
+		scandecode_obj = m_new_obj_with_finaliser(preview_obj_t);
+	}
 	
-    preview_obj_t *self = m_new_obj(preview_obj_t);
+    preview_obj_t *self = scandecode_obj;
 	self->base.type = &camera_scandecode_type;
 	self->cam_h = camheight;
 	self->cam_w = camwidth;
@@ -275,8 +282,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode_resume_obj, camera_scandecode
 STATIC mp_obj_t camera_scandecode_stop(mp_obj_t self_in)
 {
 	
-	camera_switch(DECODE_CLOSE);
 	int error =  Helios_camera_scandecode_stop();
+	//camera_switch(DECODE_CLOSE);
 
 	return mp_obj_new_int(error);
 }
@@ -287,14 +294,33 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode_stop_obj, camera_scandecode_s
 STATIC mp_obj_t camera_scandecode_callback(mp_obj_t self_in, mp_obj_t callback)
 {
 	preview_obj_t *self = MP_OBJ_TO_PTR(self_in);
-	self->callback = callback;
-	callback_cur = callback;
+	
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	callback_cur = &cb;
+	mp_sched_schedule_callback_register(callback_cur, callback);
+	
+	self->callback = callback_cur;
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(camera_scandecode_callback_obj, camera_scandecode_callback);
 
+STATIC mp_obj_t camera_scandecode_deinit(mp_obj_t self_in)
+{
+	preview_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	int ret = -1;
+	ret = Helios_camera_close();
+	callback_cur = NULL;
+	scandecode_obj = NULL;
+	self->callback = NULL;
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_scandecode__del__obj, camera_scandecode_deinit);
+
+
 
 STATIC const mp_rom_map_elem_t scandecode_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR___del__), 	MP_ROM_PTR(&camera_scandecode__del__obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&camera_scandecode_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&camera_scandecode_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_start), MP_ROM_PTR(&camera_scandecode_start_obj) },

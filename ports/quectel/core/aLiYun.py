@@ -30,7 +30,7 @@ CLIENT_ID_R = "{}|securemode=2,authType=register,random={},signmethod=hmacsha256
 
 class aLiYun:
 
-    def __init__(self, productKey, productSecret=None, DeviceName=None, DeviceSecret=None):
+    def __init__(self, productKey, productSecret=None, DeviceName=None, DeviceSecret=None, MqttServer=None):
         self.productKey = productKey
         self.productSecret = productSecret
         self.DeviceName = DeviceName
@@ -40,6 +40,7 @@ class aLiYun:
         self.recvCb = None
         self.mqtt_client = None
         self.password = None
+        self.addr = MqttServer
         self.port = 1883
 
         self.clientID = None
@@ -87,6 +88,8 @@ class aLiYun:
             except:
                 return -1
             utime.sleep(2)
+            self.mqttObj = None
+            self.mqtt_client = None
             mqtts_cl.wait_msg()
             utime.sleep(1)
             mqtts_cl.disconnect()
@@ -94,11 +97,15 @@ class aLiYun:
         try:
             self.connect(mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn=reconn, pingmaxnum=pingmaxnum)
             return 0
-        except:
+        except Exception as e:
+            print("[ERROR] connect failed. Error : %s" % str(e))
             return -1
 
     def connect(self, mqt_id, secret, hmac_msg, keepAlive, clean_session, ssl, reconn, pingmaxnum):
-        mqt_server = MQTT_SERVER.format(self.productKey)
+        if self.addr is None:
+            mqt_server = MQTT_SERVER.format(self.productKey)
+        else:
+            mqt_server = self.addr
         self.password = hmac.new(bytes(secret, "utf8"), msg=bytes(hmac_msg, "utf8"), digestmod=sha256).hexdigest()
         self.mqtt_client = MQTTClient(mqt_id, mqt_server, self.port, self.username, self.password,
                                  keepAlive, ssl=ssl, reconn=reconn, pingmaxnum=pingmaxnum)

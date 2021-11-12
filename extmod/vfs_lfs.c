@@ -33,9 +33,9 @@
 
 #if MICROPY_VFS && (MICROPY_VFS_LFS1 || MICROPY_VFS_LFS2)
 
-#define QUECTE_PY_LFS1
+#define QUECTEL_PY_LFS1
 
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 enum { LFS_MAKE_ARG_readsize, LFS_MAKE_ARG_progsize, LFS_MAKE_ARG_lookahead ,LFS_MAKE_ARG_pname };
 
 const mp_arg_t lfs_make_allowed_args[] = {   
@@ -68,7 +68,7 @@ static const mp_arg_t lfs_make_allowed_args[] = {
 #define MP_TYPE_VFS_LFSx mp_type_vfs_lfs1
 #define MP_TYPE_VFS_LFSx_(s) mp_type_vfs_lfs1##s
 
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 typedef struct lfs1_flash_info
 {
     unsigned int FlashType;

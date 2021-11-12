@@ -147,6 +147,9 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t *)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
             // at the moment, the value of SystemExit is unused
             ret = pyexec_system_exit;
+        } else if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t *)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_KeyboardInterrupt))) {
+            mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
+            ret = RET_KBD_INTERRUPT;
         } else {
             mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
             ret = 0;
@@ -157,7 +160,12 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
     // display debugging info if wanted
     if ((exec_flags & EXEC_FLAG_ALLOW_DEBUGGING) && repl_display_debugging_info) {
         mp_uint_t ticks = mp_hal_ticks_ms() - start; // TODO implement a function that does this properly
-        printf("took " UINT_FMT " ms\n", ticks);
+        #if defined(PLAT_Qualcomm)
+			printf("took " UINT_FMT " ms\n", (unsigned long)ticks);
+		#else
+			printf("took " UINT_FMT " ms\n", ticks);
+		#endif
+        
         // qstr info
         {
             size_t n_pool, n_qstr, n_str_data_bytes, n_total_bytes;
@@ -571,7 +579,9 @@ friendly_repl_reset:
     //mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
 	//mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on "  "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
 #if !defined(PLAT_RDA)
+	#if !defined(PLAT_Qualcomm)
 	Helios_Dev_GetModel((void *)mob_model_id, sizeof(mob_model_id));
+	#endif
 	sprintf(printf_info, "Quecpython %s on %s ; %s with %s \r\n ", MICROPY_GIT_TAG, MICROPY_BUILD_DATE, mob_model_id, MICROPY_HW_MCU_NAME);
 	mp_hal_stdout_tx_str(printf_info);
 #endif

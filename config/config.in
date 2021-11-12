@@ -17,11 +17,19 @@ config QRCODE
 help 
     This is qrcode support.
 
-config POC 
-    bool "Enable poc" 
-    default n 
-help 
-    This is poc support.
+
+choice POC_PLATFORM
+   bool "Select POC platform"
+   default POC_BND
+   depends on POC
+   help
+       Select POC platform.
+
+config POC_BND
+   bool "bnd platform"
+config POC_SL
+   bool "sl platform"
+endchoice
 
 config CAMERA 
     bool "Enable camera" 
@@ -46,9 +54,9 @@ help
 
 config QUECTHING 
     bool "Enable quecthing" 
-    default n 
+    default y 
 help 
-    This supports QR code barcode decoding.
+    This is quecIot support.
 
 config SPINAND 
     bool "Enable spi nand flash" 
@@ -87,6 +95,22 @@ config SPI_SDCARD
 help 
     Support SPI SD Card support.
 
+config BT
+    bool "Enable BT OR BLE" 
+    default n
+help 
+    This is BT support.
+	
+config VIOCE_CALL
+    bool "Enable VoiceCall" 
+    default n
+help 
+    This is VoiceCall support.
 
+config TTS
+    bool "Enable TTS" 
+    default n
+help 
+    This is TTS support.
 
 

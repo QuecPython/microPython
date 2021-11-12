@@ -54,7 +54,7 @@ typedef struct _machine_timer_obj_t {
 	//ONE_SHOT OR PERIODIC 
     mp_uint_t mode;
     mp_uint_t period;
-    mp_obj_t callback;
+    c_callback_t callback;
 	mp_int_t timer_id;
 	mp_int_t timer_id_real;
 	MP_TIMER_STATUS timer_status;
@@ -63,6 +63,8 @@ typedef struct _machine_timer_obj_t {
 } machine_timer_obj_t;
 
 STATIC void machine_timer_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    (void)(print);
+    (void)(kind);
     machine_timer_obj_t *self = self_in;
     HELIOS_TIMER_LOG("period=%d\r\n", self->period);
     HELIOS_TIMER_LOG("timer_id=%d\r\n", self->timer_id);
@@ -71,16 +73,12 @@ STATIC void machine_timer_print(const mp_print_t *print, mp_obj_t self_in, mp_pr
 
 STATIC void machine_timer_isr(UINT32 self_in) {
 
-    //HELIOS_TIMER_LOG("timer cb1,self_in=%#X\r\n",self_in);
-
     machine_timer_obj_t *self = (void*)self_in;
-    
-	if((self!=NULL )&& (mp_obj_is_callable(self->callback)))
+
+	if(self != NULL)
 	{
-        //HELIOS_TIMER_LOG("timer mp_obj_is_callable");
-    	mp_sched_schedule(self->callback, self);
+    	mp_sched_schedule_ex(&self->callback, self);
 	}
-    // mp_hal_wake_main_task_from_isr();
 
 }
 
@@ -124,16 +122,25 @@ STATIC mp_obj_t machine_timer_init_helper(machine_timer_obj_t *self, mp_uint_t n
     }
 
     self->mode = args[ARG_mode].u_int;
-    self->callback = args[ARG_callback].u_obj;
+    
+    mp_sched_schedule_callback_register(&self->callback, args[ARG_callback].u_obj);
 
-    HELIOS_TIMER_LOG("mode: %d, period: %d,callback:%#X\r\n", self->mode, self->period,self->callback);
+    HELIOS_TIMER_LOG("mode: %d, period: %d,callback:%#X\r\n", self->mode, self->period,self->callback.cb);
 
 // Check whether the timer is already running, if so return 0
     if (MP_TIMER_RUNNING == self->timer_status) {
         return mp_obj_new_int(0);
     }
-	
-	int timer = Helios_Timer_init( (void* )machine_timer_isr, self);
+
+    int timer = 0;
+	if(0 == self->timer_id_real)
+	{
+	    timer = Helios_Timer_init( (void* )machine_timer_isr, self);
+	}
+	else
+	{
+        timer = self->timer_id_real;
+	}
 	
     if(!timer) {
         return mp_const_false;
@@ -164,6 +171,7 @@ STATIC mp_obj_t machine_timer_init_helper(machine_timer_obj_t *self, mp_uint_t n
 
 
 STATIC mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    (void)(type);
 	mp_int_t timer_id=0;
 	
 	if (n_args > 0) {
@@ -187,6 +195,7 @@ STATIC mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args,
 	machine_timer_obj_t *self = m_new_obj(machine_timer_obj_t);
     self->base.type = &machine_timer_type;
 	self->timer_id = timer_id;
+	self->timer_id_real = 0;
 	self->timer_status = MP_TIMER_CREATED;
 
     if (n_args > 0 || n_kw > 0) {
@@ -211,17 +220,29 @@ STATIC mp_obj_t machine_timer_init(size_t n_args, const mp_obj_t *args, mp_map_t
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_timer_init_obj, 1, machine_timer_init);
 
+STATIC mp_obj_t machine_timer_stop(mp_obj_t self_in) {
+    machine_timer_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+	if(self->timer_id_real)
+	{
+		HELIOS_TIMER_LOG("machine_timer_stop (%#X) \r\n",self->timer_id_real);		
+		Helios_Timer_Stop(self->timer_id_real);
+		self->timer_status = MP_TIMER_STOP;
+		return mp_obj_new_int(0);
+	}
+    return mp_obj_new_int(-1);
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_timer_stop_obj, machine_timer_stop);
 
 
 STATIC mp_obj_t machine_timer_deinit(mp_obj_t self_in) {
-    int ret=0;
     machine_timer_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-    
-    HELIOS_TIMER_LOG("timer deinit: id (%#X) \r\n",self->timer_id_real);
 	if(self->timer_id_real)
 	{
-		HELIOS_TIMER_LOG("timer Helios_Timer_Deinit (%#X) \r\n",self->timer_id_real);		
+		HELIOS_TIMER_LOG("machine_timer_deinit (%#X) \r\n",self->timer_id_real);
+		Helios_Timer_Stop(self->timer_id_real);
 		Helios_Timer_Deinit(self->timer_id_real);
 		self->timer_id_real = 0;
 		self->timer_status = MP_TIMER_STOP;
@@ -260,7 +281,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(machine_timer_initialize_obj, machine_timer_ini
 STATIC const mp_rom_map_elem_t machine_timer_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&machine_timer_deinit_obj) },
 	{ MP_ROM_QSTR(MP_QSTR___init__), MP_ROM_PTR(&machine_timer_initialize_obj) },
-    { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&machine_timer_deinit_obj) },
+    { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&machine_timer_stop_obj) },
     { MP_ROM_QSTR(MP_QSTR_start), MP_ROM_PTR(&machine_timer_init_obj) },
    // { MP_ROM_QSTR(MP_QSTR_value), MP_ROM_PTR(&machine_timer_value_obj) },
     { MP_ROM_QSTR(MP_QSTR_ONE_SHOT), MP_ROM_INT(TIMER_AUTO_DELETE) },

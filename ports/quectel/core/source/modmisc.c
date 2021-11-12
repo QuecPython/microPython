@@ -56,15 +56,21 @@ STATIC mp_obj_t qpy_misc_set_replEnable(size_t n_args, const mp_obj_t *args)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_misc_set_replEnable_obj, 1, 2, qpy_misc_set_replEnable);
 
-
 STATIC const mp_rom_map_elem_t misc_module_globals_table[] = {
 	{ MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_misc) },
 	{ MP_ROM_QSTR(MP_QSTR_Power), MP_ROM_PTR(&misc_power_type) },
-	{ MP_ROM_QSTR(MP_QSTR_PowerKey), MP_ROM_PTR(&misc_powerkey_type) },
-	{ MP_ROM_QSTR(MP_QSTR_PWM), MP_ROM_PTR(&misc_pwm_type) },
 	{ MP_ROM_QSTR(MP_QSTR_ADC), MP_ROM_PTR(&misc_adc_type) },
-	{ MP_ROM_QSTR(MP_QSTR_USB), MP_ROM_PTR(&misc_usb_type) },
+	{ MP_ROM_QSTR(MP_QSTR_PowerKey), MP_ROM_PTR(&misc_powerkey_type) },
+#if !defined(PLAT_Qualcomm)
 	{ MP_ROM_QSTR(MP_QSTR_replEnable), MP_ROM_PTR(&qpy_misc_set_replEnable_obj) },
+#if !defined(PLAT_RDA)
+	{ MP_ROM_QSTR(MP_QSTR_PWM), MP_ROM_PTR(&misc_pwm_type) },
+	{ MP_ROM_QSTR(MP_QSTR_USB), MP_ROM_PTR(&misc_usb_type) },
+#endif
+#endif
+#if defined(PLAT_ASR)
+    { MP_ROM_QSTR(MP_QSTR_USBNET), MP_ROM_PTR(&misc_usbnet_module) },
+#endif
 };
 
 STATIC MP_DEFINE_CONST_DICT(misc_module_globals, misc_module_globals_table);

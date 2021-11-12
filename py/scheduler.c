@@ -26,11 +26,11 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "py/runtime.h"
-#if !defined(PLAT_RDA)
 #include "mphalport.h"
-#endif
+
 #if MICROPY_KBD_EXCEPTION
 // This function may be called asynchronously at any time so only do the bare minimum.
 void MICROPY_WRAP_MP_KEYBOARD_INTERRUPT(mp_keyboard_interrupt)(void) {
@@ -67,6 +67,7 @@ void mp_handle_pending(bool raise_exc) {
         if (MP_STATE_VM(sched_state) == MP_SCHED_PENDING) {
             mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
             if (obj != MP_OBJ_NULL) {
+                CHECK_MAINPY_KBD_INTERRUPT_ENTER()
                 MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
                 if (!mp_sched_num_pending()) {
                     MP_STATE_VM(sched_state) = MP_SCHED_IDLE;
@@ -75,6 +76,7 @@ void mp_handle_pending(bool raise_exc) {
                     MICROPY_END_ATOMIC_SECTION(atomic_state);
                     nlr_raise(obj);
                 }
+                CHECK_MAINPY_KBD_INTERRUPT_EXIT()
             }
             mp_handle_pending_tail(atomic_state);
         } else {
@@ -140,7 +142,7 @@ bool MICROPY_WRAP_MP_SCHED_SCHEDULE(mp_sched_schedule)(mp_obj_t function, mp_obj
         ret = false;
     }
     MICROPY_END_ATOMIC_SECTION(atomic_state);
-#if !defined(PLAT_RDA)
+#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
     if(true == ret) {
     	quecpython_send_msg_to_sleep_func();
     	mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
@@ -151,6 +153,58 @@ bool MICROPY_WRAP_MP_SCHED_SCHEDULE(mp_sched_schedule)(mp_obj_t function, mp_obj
     }
 #endif
     return ret;
+}
+
+extern mp_obj_t mp_obj_bound_get_self(void *bound);
+extern mp_obj_t mp_obj_bound_get_meth(void *bound);
+//Add a callback to the unscheduled table. If it is a Method,
+//load it first so that the recorded callback is not collected by the GC
+bool mp_sched_schedule_ex(c_callback_t *callback, mp_obj_t arg)
+{
+    if(NULL == callback)
+    {
+        return false;
+    }
+
+    if((false == callback->is_method) && mp_obj_is_callable(callback->cb))//function
+    {
+        return mp_sched_schedule(callback->cb, arg);
+    }
+    else if(true == callback->is_method)//bound_method
+    {
+        mp_obj_t cb = mp_load_attr(callback->method_self, callback->method_name);
+        return mp_sched_schedule(cb, arg);
+    }
+    else
+    {
+	    return false;
+	}
+}
+
+//Register callback
+bool mp_sched_schedule_callback_register(c_callback_t *callback, mp_obj_t func_obj)
+{
+    if(NULL == callback) {
+        return false;
+    }
+    memset(callback, 0 , sizeof(c_callback_t));
+    if(mp_const_none != func_obj)
+    {
+        const mp_obj_type_t *type = mp_obj_get_type(func_obj);
+        if(type->name == MP_QSTR_bound_method)//is bound_meth. Records the object for this method, along with the bytecode for the name of this method
+        {
+            callback->is_method = true;
+            callback->method_self = mp_obj_bound_get_self(func_obj);
+            callback->method_name = mp_obj_fun_get_name(mp_obj_bound_get_meth(func_obj));
+            callback->cb = func_obj;
+            return true;
+        }
+    }
+
+    callback->is_method = false;
+    callback->cb = func_obj;
+
+    return true;
 }
 
 #else // MICROPY_ENABLE_SCHEDULER

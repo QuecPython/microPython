@@ -46,6 +46,15 @@ typedef void *mp_obj_t;
 typedef const void *mp_const_obj_t;
 #endif
 
+
+typedef struct _c_callback_t {
+    bool is_method;
+    mp_obj_t method_self;
+    qstr method_name;
+    mp_obj_t cb;
+}c_callback_t;
+
+
 // This mp_obj_type_t struct is a concrete MicroPython object which holds info
 // about a type.  See below for actual definition of the struct.
 typedef struct _mp_obj_type_t mp_obj_type_t;

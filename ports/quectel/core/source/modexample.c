@@ -29,6 +29,7 @@
 #include "stream.h"
 #include "mperrno.h"
 #include "pyexec.h"
+#include "interrupt_char.h"
 
 //void do_str(const char *src, mp_parse_input_kind_t input_kind) {
 //    nlr_buf_t nlr;
@@ -119,11 +120,19 @@ STATIC mp_obj_t example_exec(const mp_obj_t arg0)
 		{
 			snprintf(fname, sizeof(fname), "%s", (char *)bufinfo.buf);
 		}
+		MAINPY_RUNNING_FLAG_SET();
 		ret = pyexec_file_if_exists(fname);
+		MAINPY_RUNNING_FLAG_CLEAR();
 	}
 	if ( ret == -1 )
 	{
 		mp_raise_msg_varg(&mp_type_OSError, "File path error or not exist: [%s]", (char *)bufinfo.buf);
+	}
+	else if(ret == RET_KBD_INTERRUPT)
+	{
+        pyexec_system_exit = PYEXEC_FORCED_EXIT;
+        MAINPY_INTERRUPT_BY_KBD_FLAG_SET();
+        mp_raise_msg_varg(&mp_type_SystemExit, "CTRL_C Interrupt");
 	}
 	// Pawn 2021-01-18 for JIRA STASR3601-2428 end
 	return mp_const_none;

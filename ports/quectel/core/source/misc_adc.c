@@ -128,9 +128,11 @@ STATIC const mp_rom_map_elem_t misc_adc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&Helios_adc_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&Helios_adc_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_ADC0), MP_ROM_INT(ADC0) },
+#if !defined(PLAT_Qualcomm)
     { MP_ROM_QSTR(MP_QSTR_ADC1), MP_ROM_INT(ADC1) },
     { MP_ROM_QSTR(MP_QSTR_ADC2), MP_ROM_INT(ADC2) },
     { MP_ROM_QSTR(MP_QSTR_ADC3), MP_ROM_INT(ADC3) },
+#endif
 };
 STATIC MP_DEFINE_CONST_DICT(misc_adc_locals_dict, misc_adc_locals_dict_table);
 

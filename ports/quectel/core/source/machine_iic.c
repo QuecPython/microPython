@@ -25,6 +25,8 @@
 #include "machine_i2c.h"
 
 #include "helios_iic.h"
+#include "mphalport.h"
+
 
 const mp_obj_type_t machine_hard_i2c_type;
 
@@ -145,15 +147,17 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_i2c_read_obj, 1, machine_i2c_read_mem)
 STATIC const mp_rom_map_elem_t machine_i2c_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&machine_i2c_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&machine_i2c_write_obj) },
-#if 1	
 	// class constants
     { MP_ROM_QSTR(MP_QSTR_I2C0),       MP_ROM_INT(HELIOS_I2C0) },
+#if !defined(PLAT_Qualcomm)    
     { MP_ROM_QSTR(MP_QSTR_I2C1),       MP_ROM_INT(HELIOS_I2C1) },
+#if !defined(PLAT_RDA)
     { MP_ROM_QSTR(MP_QSTR_I2C2),       MP_ROM_INT(HELIOS_I2C2) },
     { MP_ROM_QSTR(MP_QSTR_I2C3),       MP_ROM_INT(HELIOS_I2C3) },
+#endif
+#endif
     { MP_ROM_QSTR(MP_QSTR_STANDARD_MODE),       MP_ROM_INT(HELIOS_STANDARD_MODE) },
     { MP_ROM_QSTR(MP_QSTR_FAST_MODE),       MP_ROM_INT(HELIOS_FAST_MODE) },
-#endif
 };
 
 MP_DEFINE_CONST_DICT(mp_machine_hard_i2c_locals_dict, machine_i2c_locals_dict_table);

@@ -35,6 +35,7 @@ typedef enum
 	PWM1 = 1,
 	PWM2 = 2,
 	PWM3 = 3,
+	PWMMAX,
 }PWMn;
 
 
@@ -53,6 +54,8 @@ typedef enum HELIOS_PWM_CYCLE_RANGE_ENUM
     HELIOS_PWM_CYCLE_ABOVE_10US,
     HELIOS_PWM_CYCLE_ABOVE_BELOW_US,
 } HELIOS_PWM_CYCLE_RANGE_E;
+
+STATIC misc_pwm_obj_t *misc_pwm_obj[PWMMAX] = {NULL};
 
 
 STATIC void misc_pwm_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -103,14 +106,23 @@ STATIC void misc_pwm_init_helper(misc_pwm_obj_t *self,
 
 STATIC mp_obj_t misc_pwm_make_new(const mp_obj_type_t *type,
     size_t n_args, size_t n_kw, const mp_obj_t *args) {
-    mp_arg_check_num(n_args, n_kw, 1, MP_OBJ_FUN_ARGS_MAX, true);
+    mp_arg_check_num(n_args, n_kw, 4, 4, true);
     unsigned int pin_id = mp_obj_get_int(args[0]);
 	unsigned int cycle_range_id = mp_obj_get_int(args[1]);
 
 	PWM_LOG("n_args = %d\n",n_args);
 
+	int pwm_num = pin_id;
+	if ((pwm_num < 0) || (pwm_num > PWMMAX-1))
+	{
+		mp_raise_ValueError("invalid PWMn value, must be in {0~3}.");
+	}
     // create PWM object from the given pin
-    misc_pwm_obj_t *self = m_new_obj(misc_pwm_obj_t);
+    if (misc_pwm_obj[pin_id] == NULL)
+    {
+    	misc_pwm_obj[pin_id] = m_new_obj_with_finaliser(misc_pwm_obj_t);
+    }
+    misc_pwm_obj_t *self = misc_pwm_obj[pin_id];
     self->base.type = &misc_pwm_type;
     self->pin = pin_id;
     self->high_time = 0;
@@ -135,16 +147,18 @@ MP_DEFINE_CONST_FUN_OBJ_KW(misc_pwm_init_obj, 1, misc_pwm_init);
 STATIC mp_obj_t misc_pwm_enable(mp_obj_t self_in) {
     misc_pwm_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-	uint32_t frequency = 0;
+	double frequency = 0;
 	float duty = 0;
 	if(self->cycle_range == HELIOS_PWM_CYCLE_ABOVE_1US || self->cycle_range == HELIOS_PWM_CYCLE_ABOVE_10US) {
-		frequency = 1000000 /self->cycle_time;
+		frequency = 1000000 /(double)self->cycle_time;
 	} else if (self->cycle_range == HELIOS_PWM_CYCLE_ABOVE_1MS) {
-		frequency = 1000 /self->cycle_time;
+		frequency = 1000 /(double)self->cycle_time;
 	} else if(self->cycle_range == HELIOS_PWM_CYCLE_ABOVE_BELOW_US) {
-		frequency = 1000000000 /self->cycle_time;
+		frequency = 1000000000 /(double)self->cycle_time;
 	}
 	duty = (float)self->high_time / (float)self->cycle_time;
+
+	PWM_LOG("misc_pwm_enable = %lf %f\n",frequency, duty);
 
 	
 	int ret = Helios_PWM_Start(self->pin, frequency, duty);
@@ -166,8 +180,26 @@ STATIC mp_obj_t misc_pwm_disable(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(misc_pwm_disable_obj, misc_pwm_disable);
 
+STATIC mp_obj_t misc_pwm_deinit(mp_obj_t self_in) {
+    misc_pwm_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	//PWM_LOG("misc pwm deinit.pwm=%d.\r\n", self->pin);
+	
+	misc_pwm_obj[self->pin] = NULL;
+	
+	int ret = Helios_PWM_Deinit((Helios_PwnNum)self->pin);
+	if (ret != 0)
+	{
+		PWM_LOG("pwm%d deinit failed.\r\n", self->pin);
+	}
+
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(misc_pwm_deinit_obj, misc_pwm_deinit);
+
+
 STATIC const mp_rom_map_elem_t misc_pwm_locals_dict_table[] = {
     // { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&misc_pwm_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&misc_pwm_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&misc_pwm_enable_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&misc_pwm_disable_obj) },
     { MP_ROM_QSTR(MP_QSTR_PWM0), MP_ROM_INT(PWM0) },

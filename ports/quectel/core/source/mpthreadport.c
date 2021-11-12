@@ -21,7 +21,9 @@
 #include "mpthread.h"
 #include "mphal.h"
 #include "mpthreadport.h"
+#if !defined(PLAT_Qualcomm)
 #include "arch.h"
+#endif
 #include "helios_os.h"
 
 #if MICROPY_PY_THREAD
@@ -226,6 +228,11 @@ int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait) {
 
 void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex) {
     Helios_Mutex_Unlock(*mutex);
+}
+
+//Added by Freddy @20210818 delete a lock
+void mp_thread_mutex_del(mp_thread_mutex_t *mutex) {
+    Helios_Mutex_Delete(*mutex);
 }
 
 void mp_thread_deinit(void) {

@@ -31,7 +31,9 @@
 
 STATIC const mp_rom_map_elem_t mp_module_audio_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_audio) },
+#if defined(CONFIG_TTS)
     { MP_ROM_QSTR(MP_QSTR_TTS), MP_ROM_PTR(&audio_tts_type) },
+#endif
     { MP_ROM_QSTR(MP_QSTR_Audio), MP_ROM_PTR(&audio_audio_type) },
     { MP_ROM_QSTR(MP_QSTR_Record), MP_ROM_PTR(&audio_record_type) },
 };

@@ -59,10 +59,10 @@ class GnssGetData:
     #获取GPS模块定位的经纬度信息
     def getLocation(self):
         if self.isFix() is 1:
-            lat=float(self.r.group(0).split(",")[2])/100 #纬度
-            lat_d=self.r.group(0).split(",")[3]  #纬度方向,N = 北 S = 南
-            log=float(self.r.group(0).split(",")[4])/100  #经度
-            log_d=self.r.group(0).split(",")[5]  #经度方向,E = 东,W = 西
+            lat=float(self.r.group(0).split(",")[2])//100 +float(float(float(self.r.group(0).split(",")[2])%100)/60) #
+            lat_d=self.r.group(0).split(",")[3]  #
+            log=float(self.r.group(0).split(",")[4])//100 +float(float(float(self.r.group(0).split(",")[4])%100)/60) #
+            log_d=self.r.group(0).split(",")[5]  #
             return lat,lat_d,log,log_d
         else:
             return None

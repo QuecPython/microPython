@@ -23,7 +23,7 @@
 
 #define QPY_MODSMS_LOG(msg, ...)      custom_log("SMS", msg, ##__VA_ARGS__)
 
-static mp_obj_t g_sms_user_callback;
+static c_callback_t *g_sms_user_callback = NULL;
 
 STATIC mp_obj_t qpy_sms_pdu_decode(mp_obj_t data, mp_obj_t datalen)
 {
@@ -243,10 +243,12 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sms_get_center_address_obj, qpy_sms_get_cen
 STATIC mp_obj_t qpy_sms_set_center_address(mp_obj_t address)
 {
 	char *addr = (char *)mp_obj_str_get_str(address);
-	if (strlen(addr) > 30)
+
+    //mia.zhong @20210816
+	/*if (strlen(addr) > 30)
 	{
 		mp_raise_ValueError("invalid value, the length of center addr should be no more than 30 bytes.");
-	}
+	}*/
 
 	int ret = Helios_SMS_SetCenterAddress(0, (void *)addr);
 	return mp_obj_new_int(ret);
@@ -489,7 +491,7 @@ static void qpy_sms_event_handler(uint8_t sim_id, int32_t event_id, void *ctx)
 		if (g_sms_user_callback)
 		{
 			QPY_MODSMS_LOG("[SMS] callback start.\r\n");
-			mp_sched_schedule(g_sms_user_callback, mp_obj_new_tuple(3, tuple));
+			mp_sched_schedule_ex(g_sms_user_callback, mp_obj_new_tuple(3, tuple));
 			QPY_MODSMS_LOG("[SMS] callback end.\r\n");
 		}
 	}
@@ -511,17 +513,30 @@ STATIC mp_obj_t qpy_sms_add_event_handler(mp_obj_t handler)
 	Helios_SMSInitStruct info = {0};
 	
 	info.user_cb = qpy_sms_event_handler;
-	g_sms_user_callback = handler;
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_sms_user_callback = &cb;
+	mp_sched_schedule_callback_register(g_sms_user_callback, handler);
+
 	Helios_SMS_Init(&info);
 	
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_sms_add_event_handler_obj, qpy_sms_add_event_handler);
 
-
+STATIC mp_obj_t qpy_module_sms_deinit(void)
+{
+	g_sms_user_callback = NULL;
+	Helios_SMSInitStruct info = {0};
+	info.user_cb = NULL;
+	Helios_SMS_Init(&info);
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_sms_deinit_obj, qpy_module_sms_deinit);
 
 STATIC const mp_rom_map_elem_t mp_module_sms_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),           MP_ROM_QSTR(MP_QSTR_sms) },
+    { MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_sms_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_decodePdu),          MP_ROM_PTR(&qpy_sms_pdu_decode_obj) },
     { MP_ROM_QSTR(MP_QSTR_sendTextMsg),        MP_ROM_PTR(&qpy_sms_send_text_msg_obj) },
     { MP_ROM_QSTR(MP_QSTR_sendPduMsg),         MP_ROM_PTR(&qpy_sms_send_pdu_msg_obj) },

@@ -1,11 +1,11 @@
 # Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,6 +27,11 @@ mqtt_log = log.getLogger("MQTT")
 class MQTTException(Exception):
     pass
 
+def pid_gen():
+    pid = 0
+    while True:
+        pid = pid + 1 if pid < 65535 else 1
+        yield pid
 
 class BaseMqtt:
     CONNECTEXCE = -1
@@ -45,6 +50,8 @@ class BaseMqtt:
         self.ssl = ssl
         self.ssl_params = ssl_params
         self.pid = 0
+        self.__newpid = pid_gen()
+        self.__rcv_pids = set()  # PUBACK and SUBACK pids awaiting ACK response
         self.cb = None
         self.user = user
         self.pswd = password
@@ -65,10 +72,11 @@ class BaseMqtt:
         self.ping_outstanding = False
         self.pingmaxnum = pingmaxnum
         self.pingnum = 0
-        self.mqttlock = _thread.allocate_lock()
-        self.mqttsendlock = _thread.allocate_lock()
+        self.mqttlock = None
+        self.mqttsendlock = None
         self.threadId = None
-        if keepalive !=0 and keepalive < 5:
+        self.__response_time = 5000
+        if keepalive != 0 and keepalive < 5:
             raise ValueError("inport parameter error : keepalive >= 5S")
 
     def _send_str(self, s):
@@ -97,12 +105,27 @@ class BaseMqtt:
         self.lw_retain = retain
 
     def connect(self, clean_session=True):
-        self.sock = socket.socket()
-        try:
-            addr = socket.getaddrinfo(self.server, self.port)[0][-1]
-        except Exception as e:
-            raise ValueError("DNS Parsing '{}'".format(self.server))
 
+        if self.mqttlock is None:
+            self.mqttlock = _thread.allocate_lock()
+        if self.mqttsendlock is None:
+            self.mqttsendlock = _thread.allocate_lock()
+        j = 1
+        while True:
+            if j > 5:
+                raise ValueError("DNS Parsing NULL")
+            try:
+                addrall = socket.getaddrinfo(self.server, self.port)
+            except Exception as e:
+                raise ValueError("DNS Parsing '{}'".format(self.server))
+            if not addrall:
+                j += 1
+                utime.sleep_ms(500)
+                continue
+            addr = addrall[0][-1]
+            break
+
+        self.sock = socket.socket()
         self.sock.settimeout(20)
         self.sock.connect(addr)
         if self.ssl:
@@ -128,7 +151,7 @@ class BaseMqtt:
             remaining_length = remaining_length + 2 + len(self.pswd)
         if self.lw_topic:
             connect_flags = connect_flags | 0x04 | ((self.lw_qos & 0x03) << 3) | ((self.lw_retain & 0x01) << 5)
-            remaining_length+= 2 + len(self.lw_topic) + 2 + len(self.lw_msg)
+            remaining_length += 2 + len(self.lw_topic) + 2 + len(self.lw_msg)
 
         command = 0x10
         packet = bytearray()
@@ -139,16 +162,18 @@ class BaseMqtt:
             remaining_length = remaining_length // 128
             if remaining_length > 0:
                 byte = byte | 0x80
-        
+
             remaining_bytes.append(byte)
             packet.extend(struct.pack("!B", byte))
             if remaining_length == 0:
                 break
 
         if self.mqttversion == 3:
-            packet.extend(struct.pack("!H"+str(len(protocol))+"sBBH", len(protocol), protocol, 3, connect_flags, self.keepalive))
+            packet.extend(struct.pack("!H" + str(len(protocol)) + "sBBH", len(protocol), protocol, 3, connect_flags,
+                                      self.keepalive))
         else:
-            packet.extend(struct.pack("!H"+str(len(protocol))+"sBBH", len(protocol), protocol, 4, connect_flags, self.keepalive))
+            packet.extend(struct.pack("!H" + str(len(protocol)) + "sBBH", len(protocol), protocol, 4, connect_flags,
+                                      self.keepalive))
         if self.client_id:
             packet.extend(struct.pack("!H" + str(len(self.client_id)) + "s", len(self.client_id), self.client_id))
         if self.lw_topic:
@@ -187,6 +212,12 @@ class BaseMqtt:
                 self.mqttsendlock.release()
             if self.mqttlock.locked():
                 self.mqttlock.release()
+            if self.mqttlock is not None:
+                _thread.delete_lock(self.mqttlock)
+                self.mqttlock = None
+            if self.mqttsendlock is not None:
+                _thread.delete_lock(self.mqttsendlock)
+                self.mqttsendlock = None
         # Pawn.zhou 2021/1/12 for JIRA STASR3601-2523 end
         except:
             mqtt_log.warning("Error requesting to close connection.")
@@ -203,6 +234,7 @@ class BaseMqtt:
 
     def publish(self, topic, msg, retain=False, qos=0):
         pkt = bytearray(b"\x30\0\0\0")
+        pid = next(self.__newpid)
         pkt[0] |= qos << 1 | retain
         sz = 2 + len(topic) + len(msg)
         if qos > 0:
@@ -217,40 +249,30 @@ class BaseMqtt:
         self.sock.write(pkt, i + 1)
         self._send_str(topic)
         if qos > 0:
-            self.pid += 1
-            pid = self.pid
+            self.__rcv_pids.add(pid)
             struct.pack_into("!H", pkt, 0, pid)
             self.sock.write(pkt, 2)
         self.sock.write(msg)
-        #self.last_time = utime.mktime(utime.localtime())
-        if qos == 1:
-            while 1:
-                op = self.wait_msg()
-                if op == 0x40:
-                    sz = self.sock.read(1)
-                    assert sz == b"\x02"
-                    rcv_pid = self.sock.read(2)
-                    rcv_pid = rcv_pid[0] << 8 | rcv_pid[1]
-                    if pid == rcv_pid:
-                        return
+        # self.last_time = utime.mktime(utime.localtime())
+        if qos == 0:
+            return
+        if not self._await_pid(pid):
+            mqtt_log.warning("publish QOS1 message was not received correctly")
         elif qos == 2:
             assert 0
 
     def __subscribe(self, topic, qos):
         pkt = bytearray(b"\x82\0\0\0")
         self.pid += 1
+        # self.__rcv_pids.add(pid)
         struct.pack_into("!BH", pkt, 1, 2 + 2 + len(topic) + 1, self.pid)
         self.sock.write(pkt)
         self._send_str(topic)
         self.sock.write(qos.to_bytes(1, "little"))
         if self.ssl == False:
             self.sock.settimeout(5)
-        time = utime.mktime(utime.localtime())
         while 1:
             op = self.wait_msg()
-            time_new = utime.mktime(utime.localtime())
-            if time_new - time:
-                raise ValueError("subscribe timeout")
             if op == 0x90:
                 resp = self.sock.read(4)
                 # print(resp)
@@ -260,8 +282,9 @@ class BaseMqtt:
                 if self.ssl == False:
                     self.sock.setblocking(True)
                 return
-            elif op & 0xf0 == 0x30 or op == b"\xd0":
-                continue
+            elif op is not None:
+                if op & 0xf0 == 0x30 or op == b"\xd0":
+                    continue
             else:
                 break
 
@@ -288,11 +311,26 @@ class BaseMqtt:
             # raise OSError(-1)
             # Pawn 2020/11/14 - WFZT mqttBUg -1
             return None
+
         if res == b"\xd0":  # PINGRESP
             self.ping_outstanding = False
             sz = self.sock.read(1)[0]
             assert sz == 0
             return res
+
+        if res == b'\x40':  # PUBACK: save pid
+            sz = self.sock.read(1)
+            if sz != b"\x02":
+                mqtt_log.warning("Publish message does not return ACK correctly")
+                return
+            rcv_pid = self.sock.read(2)
+            pid = rcv_pid[0] << 8 | rcv_pid[1]
+            if pid in self.__rcv_pids:
+                self.__rcv_pids.discard(pid)
+                return
+            else:
+                mqtt_log.warning("Publish message does not return ACK correctly")
+                return
 
         op = res[0]
         if op & 0xf0 != 0x30:
@@ -314,7 +352,7 @@ class BaseMqtt:
             struct.pack_into("!H", pkt, 2, pid)
             self.sock.write(pkt)
             return op
-        elif op & 6 == 4:
+        if op & 6 == 4:
             assert 0
 
     # Checks whether a pending message from server is available.
@@ -323,6 +361,19 @@ class BaseMqtt:
     def check_msg(self):
         self.sock.setblocking(False)
         return self.wait_msg()
+
+    def _timeout(self, t):
+        return utime.ticks_diff(utime.ticks_ms(), t) > self.__response_time
+
+    def _await_pid(self, pid):
+        t = utime.ticks_ms()
+        while pid in self.__rcv_pids:  # local copy
+            if self._timeout(t):
+                break  # Must repub or bail out
+            utime.sleep_ms(1000)
+        else:
+            return True  # PID received. All done.
+        return False
 
     def get_mqttsta(self):
         '''
@@ -344,9 +395,11 @@ class BaseMqtt:
         else:
             return self.CONNECTEXCE
 
+
 class MQTTClient(BaseMqtt):
     DELAY = 2
     DEBUG = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.error_callback = None
@@ -367,6 +420,10 @@ class MQTTClient(BaseMqtt):
                 self.mqttsendlock.release()
             _thread.stop_thread(self.threadId)
             self.threadId = None
+        if self.reconn:
+            if self.error_callback is not None:
+                e = "reconnect_start"
+                self.error_callback(e)#start reconnect
         while 1:
             try:
                 self.sock.close()
@@ -379,13 +436,17 @@ class MQTTClient(BaseMqtt):
                             "[%s] The network condition has been restored and an attempt will be made to reconnect" % time_info)
                         self.pingFlag = False
                         self.connect(self.clean_session)
-                        if self.mqttlock.locked():
-                            self.mqttlock.release()
                         mqtt_log.info("[%s] Reconnection successful!" % time_info)
                         if self.topic_list:
                             for topic_re in self.topic_list:
                                 super().subscribe(topic_re, self.qos)
                         time_info = self.logTime()
+                        if self.mqttlock.locked():
+                            self.mqttlock.release()
+                        if self.reconn:
+                            if self.error_callback is not None:
+                                e = "reconnect_success"
+                                self.error_callback(e)#reconnect success
                         return
                     else:
                         time_info = self.logTime()
@@ -401,8 +462,8 @@ class MQTTClient(BaseMqtt):
                 i += 1
                 time_info = self.logTime()
                 mqtt_log.warning(
-                    "[%s] The connection attempt failed and will be tried again after %d seconds." % (time_info, 5+i))
-                utime.sleep(5+i)
+                    "[%s] The connection attempt failed and will be tried again after %d seconds." % (time_info, 5 + i))
+                utime.sleep(5 + i)
 
     def publish(self, topic, msg, retain=False, qos=0):
         while True:
@@ -445,16 +506,19 @@ class MQTTClient(BaseMqtt):
             super().connect(clean_session)
         except Exception as e:
             if str(e) == "104":
-                raise ValueError("MQTT Connect Error='{}' Server Actively RST Disconnected.Need Check addr&port".format(e))
+                raise ValueError(
+                    "MQTT Connect Error='{}' Server Actively RST Disconnected.Need Check addr&port".format(e))
             elif str(e) == "107" or str(e) == "4":
-                raise ValueError("MQTT Connect Error='{}' Server Actively FIN Disconnected.Need Check Connection parameters".format(e))
+                raise ValueError(
+                    "MQTT Connect Error='{}' Server Actively FIN Disconnected.Need Check Connection parameters".format(
+                        e))
             elif str(e) == "110":
                 raise ValueError("MQTT Connect Error='{}' Timeout.Need Check Network".format(e))
             raise ValueError("MQTT Connect error='{}' FAIL".format(e))
         if self.keepalive > 0 and not self.pingFlag:
             # Pawn.zhou 2021/1/12 for JIRA STASR3601-2523 begin
-            task_stacksize =_thread.stack_size()
-            _thread.stack_size(16*1024)
+            task_stacksize = _thread.stack_size()
+            _thread.stack_size(16 * 1024)
             self.threadId = _thread.start_new_thread(self.__loop_forever, ())
             _thread.stack_size(task_stacksize)
             self.pingFlag = True
@@ -466,10 +530,10 @@ class MQTTClient(BaseMqtt):
     def __loop_forever(self):
         while True:
             if self.keepalive >= 5:
-               keepalive = self.keepalive - 3
+                keepalive = self.keepalive - 3
             try:
                 if not self.timerFlag:
-                    if self.mqttsendlock.locked():
+                    if self.mqttsendlock is not None and self.mqttsendlock.locked():
                         self.mqttsendlock.release()
                     self.threadId = None
                     break
@@ -481,24 +545,24 @@ class MQTTClient(BaseMqtt):
                     if self.ping_outstanding == True:
                         mqtt_log.warning("[%s] Send ping timeout. Trying to reconnect" % time)
                         if not self.reconn:
-                            if self.mqttsendlock.locked():
+                            if self.mqttsendlock is not None and self.mqttsendlock.locked():
                                 self.mqttsendlock.release()
                             self.threadId = None
                             raise Exception("Send ping timeout.")
                         else:
                             if self.pingnum <= 0:
-                                mqtt_log.warning("[%s] Send ping timeout. Trying to reconnect" % time) 
+                                mqtt_log.warning("[%s] Send ping timeout. Trying to reconnect" % time)
                                 self.sock.settimeout(3)
                                 self.pingFlag = False
-                                if self.mqttsendlock.locked():
+                                if self.mqttsendlock is not None and self.mqttsendlock.locked():
                                     self.mqttsendlock.release()
                                 self.threadId = None
                                 break
                             else:
-                                mqtt_log.warning("[%s] Trying to resend ping(%d)" % (time,self.pingnum))
+                                mqtt_log.warning("[%s] Trying to resend ping(%d)" % (time, self.pingnum))
                                 self.pingnum = self.pingnum - 1
                     while True:
-                        if self.mqttsendlock.locked():
+                        if self.mqttsendlock is not None and self.mqttsendlock.locked():
                             utime.sleep_ms(10)
                             continue
                         self.mqttsendlock.acquire()
@@ -509,7 +573,7 @@ class MQTTClient(BaseMqtt):
                     utime.sleep(5)
                     continue
             except Exception as e:
-                if self.mqttsendlock.locked():
+                if self.mqttsendlock is not None and self.mqttsendlock.locked():
                     self.mqttsendlock.release()
                 if not self.timerFlag:
                     self.threadId = None

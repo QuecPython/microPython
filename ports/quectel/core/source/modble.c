@@ -27,10 +27,10 @@
 #include "helios_debug.h"
 #include "helios_ble.h"
 
-#define MOD_BLE_LOG(msg, ...)      custom_log(ble, msg, ##__VA_ARGS__)
+#define MOD_BLE_LOG(msg, ...)      custom_log(modble, msg, ##__VA_ARGS__)
 
-static mp_obj_t g_ble_server_callback = NULL;
-static mp_obj_t g_ble_client_callback = NULL;
+static c_callback_t *g_ble_server_callback = NULL;
+static c_callback_t *g_ble_client_callback = NULL;
 
 
 static void qpy_ble_data_print(size_t len, void *data)
@@ -86,7 +86,7 @@ static void qpy_ble_server_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(2, tuple));
+				mp_sched_schedule_ex(g_ble_server_callback, mp_obj_new_tuple(2, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -121,7 +121,7 @@ static void qpy_ble_server_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule_ex(g_ble_server_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			
@@ -144,7 +144,7 @@ static void qpy_ble_server_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(7, tuple));
+				mp_sched_schedule_ex(g_ble_server_callback, mp_obj_new_tuple(7, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -166,7 +166,7 @@ static void qpy_ble_server_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule_ex(g_ble_server_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			
@@ -191,7 +191,7 @@ static void qpy_ble_server_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_server_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_server_callback, mp_obj_new_tuple(7, tuple));
+				mp_sched_schedule_ex(g_ble_server_callback, mp_obj_new_tuple(7, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			
@@ -234,6 +234,20 @@ STATIC mp_obj_t qpy_ble_get_status(void)
 	return mp_obj_new_int(-1);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_get_status_obj, qpy_ble_get_status);
+
+STATIC mp_obj_t qpy_ble_get_public_addr(void)
+{
+	int ret = 0;
+	Helios_BtBleAddr ble_addr = {0};
+	ret = Helios_BLE_GetPublic_addr(&ble_addr);
+	if (ret == 0)
+	{
+		return mp_obj_new_bytes(ble_addr.addr, HELIOS_BT_MAC_ADDRESS_SIZE);
+	}
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_ble_get_public_addr_obj, qpy_ble_get_public_addr);
+
 
 #if 0
 STATIC mp_obj_t qpy_ble_get_connect_status(mp_obj_t addr)
@@ -289,7 +303,11 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_ble_gatt_set_local_name_obj, qpy_ble_gatt_s
 STATIC mp_obj_t qpy_ble_gatt_server_init(mp_obj_t callback)
 {
 	Helios_BLEInitStruct info = {0};
-	g_ble_server_callback = callback;
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_ble_server_callback = &cb;
+	mp_sched_schedule_callback_register(g_ble_server_callback, callback);
+	
 	info.ble_user_cb = qpy_ble_server_user_callback;
 	int ret = Helios_BLE_GattServerInit(&info);
 	return mp_obj_new_int(ret);
@@ -300,6 +318,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_gatt_server_init_obj, qpy_ble_gatt_serv
 STATIC mp_obj_t qpy_ble_gatt_server_release(void)
 {
 	int ret = 0;
+	g_ble_server_callback = NULL;
 	ret = Helios_BLE_GattServerRelease();
 	return mp_obj_new_int(ret);
 }
@@ -657,7 +676,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(2, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(2, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -690,7 +709,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(9, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(9, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -718,7 +737,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -740,7 +759,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(7, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(7, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -762,7 +781,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -782,7 +801,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(5, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(5, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -808,7 +827,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(4, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			free(pinfo->pay_load);
@@ -827,7 +846,7 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 			if (g_ble_client_callback)
 			{
 				MOD_BLE_LOG("[ble] callback start.\r\n");
-				mp_sched_schedule(g_ble_client_callback, mp_obj_new_tuple(3, tuple));
+				mp_sched_schedule_ex(g_ble_client_callback, mp_obj_new_tuple(3, tuple));
 				MOD_BLE_LOG("[ble] callback end.\r\n");
 			}
 			break;
@@ -841,7 +860,11 @@ static void qpy_ble_client_user_callback(void *ind_msg_buf, void *ctx)
 STATIC mp_obj_t qpy_ble_gatt_client_init(mp_obj_t callback)
 {
 	Helios_BLEInitStruct info = {0};
-	g_ble_client_callback = callback;
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_ble_client_callback = &cb;
+	mp_sched_schedule_callback_register(g_ble_client_callback, callback);
+	
 	info.ble_user_cb = qpy_ble_client_user_callback;
 	int ret = Helios_BLE_GattClientInit(&info);
 	return mp_obj_new_int(ret);
@@ -852,6 +875,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_gatt_client_init_obj, qpy_ble_gatt_clie
 STATIC mp_obj_t qpy_ble_gatt_client_release(void)
 {
 	int ret = 0;
+	g_ble_client_callback = NULL;
 	ret = Helios_BLE_GattClientRelease();
 	return mp_obj_new_int(ret);
 }
@@ -1191,14 +1215,49 @@ STATIC mp_obj_t qpy_ble_gatt_write_chara_no_rsp(size_t n_args, const mp_obj_t *a
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_ble_gatt_write_chara_norsp_obj, 3, 3, qpy_ble_gatt_write_chara_no_rsp);
 
+STATIC mp_obj_t qpy_ble_gatt_set_scanreport_filter(mp_obj_t act)
+{
+	uint16_t switch_filter = mp_obj_get_int(act);
+	if ((switch_filter != 0) && (switch_filter != 1))
+	{
+		mp_raise_ValueError("invalid value, act should be in [0,1].");
+	}
+	int ret = Helios_BLE_SetScanReportFilter(switch_filter);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_ble_set_scanreport_filter_obj, qpy_ble_gatt_set_scanreport_filter);
+
+STATIC mp_obj_t qpy_module_ble_deinit(void)
+{
+	MOD_BLE_LOG("ble module deinit.\r\n");
+	if (g_ble_server_callback != NULL)
+	{
+		MOD_BLE_LOG("ble server deinit.\r\n");
+		Helios_BLE_GattStop();
+		Helios_BLE_GattServerRelease();
+		g_ble_server_callback = NULL;
+	}
+	if (g_ble_client_callback != NULL)
+	{
+		MOD_BLE_LOG("ble client deinit.\r\n");
+		Helios_BLE_GattStop();
+		Helios_BLE_GattClientRelease();
+		g_ble_client_callback = NULL;
+	}
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_ble_deinit_obj, qpy_module_ble_deinit);
+
 
 STATIC const mp_rom_map_elem_t mp_module_ble_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR___name__),			MP_ROM_QSTR(MP_QSTR_ble) 							},
+	{ MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),			MP_ROM_PTR(&qpy_module_ble_deinit_obj) 				},
 	{ MP_ROM_QSTR(MP_QSTR_serverInit),			MP_ROM_PTR(&qpy_ble_gatt_server_init_obj) 			},
 	{ MP_ROM_QSTR(MP_QSTR_serverRelease),		MP_ROM_PTR(&qpy_ble_gatt_server_release_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_gattStart),			MP_ROM_PTR(&qpy_ble_gatt_start_obj) 				},
 	{ MP_ROM_QSTR(MP_QSTR_gattStop),			MP_ROM_PTR(&qpy_ble_gatt_stop_obj) 					},
 	{ MP_ROM_QSTR(MP_QSTR_getStatus),			MP_ROM_PTR(&qpy_ble_get_status_obj) 				},
+	{ MP_ROM_QSTR(MP_QSTR_getPublicAddr),		MP_ROM_PTR(&qpy_ble_get_public_addr_obj) 			},
 	//{ MP_ROM_QSTR(MP_QSTR_getConnStatus),		MP_ROM_PTR(&qpy_ble_get_conn_status_obj) 			},
 	{ MP_ROM_QSTR(MP_QSTR_setLocalName),		MP_ROM_PTR(&qpy_ble_gatt_set_local_name_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_setAdvParam),			MP_ROM_PTR(&qpy_ble_set_adv_param_obj) 				},
@@ -1234,6 +1293,7 @@ STATIC const mp_rom_map_elem_t mp_module_ble_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_writeChara),			MP_ROM_PTR(&qpy_ble_gatt_write_chara_obj)			},
 	{ MP_ROM_QSTR(MP_QSTR_writeCharaDesc),		MP_ROM_PTR(&qpy_ble_gatt_write_chara_desc_obj)		},
 	{ MP_ROM_QSTR(MP_QSTR_writeCharaNoRsp),		MP_ROM_PTR(&qpy_ble_gatt_write_chara_norsp_obj)		},
+	{ MP_ROM_QSTR(MP_QSTR_setScanFilter),		MP_ROM_PTR(&qpy_ble_set_scanreport_filter_obj)		},
 	
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_ble_globals, mp_module_ble_globals_table);

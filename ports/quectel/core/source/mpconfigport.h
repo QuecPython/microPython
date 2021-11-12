@@ -41,7 +41,7 @@
 #define MICROPY_STACK_CHECK    				(1)
 #define MICROPY_PY_BUILTINS_BYTEARRAY 		(1)
 #define MICROPY_PY_BUILTINS_DICT_FROMKEYS 	(0)
-#define MICROPY_PY_BUILTINS_MEMORYVIEW 		(0)
+#define MICROPY_PY_BUILTINS_MEMORYVIEW 		(1)
 #define MICROPY_PY_BUILTINS_FROZENSET 		(0)
 #define MICROPY_PY_BUILTINS_REVERSED 		(0)
 #define MICROPY_PY_BUILTINS_SET     		(1)
@@ -94,10 +94,14 @@
 #endif
 #define MICROPY_PY_IO_FILEIO				(1)
 #define MICROPY_PY_BUILTINS_INPUT   		(1)
-
+// <begin>jaxsen 2021-09-11
+#define MICROPY_PY_UASYNCIO   		        (1)
+#define MICROPY_PY_USELECT   		        (1)
+#define MICROPY_PY_UERRNO   		        (1)
+// <end> 2021-09-11
 #define MICROPY_CPYTHON_COMPAT      		(1)
 #define MICROPY_LONGINT_IMPL        		(MICROPY_LONGINT_IMPL_MPZ)
-#define MICROPY_FLOAT_IMPL          		(MICROPY_FLOAT_IMPL_FLOAT) //decimal numbers support
+#define MICROPY_FLOAT_IMPL          		(MICROPY_FLOAT_IMPL_DOUBLE) //decimal numbers support
 #define MICROPY_USE_INTERNAL_PRINTF 		(0)
 #define MICROPY_REPL_AUTO_INDENT    		(1)
 	//baron 2020/04/17
@@ -115,7 +119,7 @@
 #define MICROPY_ENABLE_SOURCE_LINE  		(1)
 #define MICROPY_PY_USOCKET_EVENTS			(1)
 #define MICROPY_ENABLE_SCHEDULER    		(1)
-#define MICROPY_SCHEDULER_DEPTH     		(32)
+#define MICROPY_SCHEDULER_DEPTH     		(64)//8
 #define MICROPY_PY_BUILTINS_FILTER			(1)
 #define MICROPY_MODULE_FROZEN_MPY   		(1)
 #define MICROPY_QSTR_EXTRA_POOL     		mp_qstr_frozen_const_pool
@@ -134,9 +138,12 @@
 #define MICROPY_PY_THREAD_GIL       		(1)
 #define MICROPY_PY_THREAD_GIL_VM_DIVISOR    (32)
 
+#if CONFIG_MBEDTLS
+#define MICROPY_PY_USSL                     (1) // (1) for original, modified by Chavis for compilation on 1/7/2021
+#define MICROPY_SSL_MBEDTLS                 (1) // (1) for original, modified by Chavis for compilation on 1/7/2021
+#endif
+
 #if defined(PLAT_RDA)
-#define MICROPY_PY_USSL                     (0) // (1) for original, modified by Chavis for compilation on 1/7/2021
-#define MICROPY_SSL_MBEDTLS                 (0) // (1) for original, modified by Chavis for compilation on 1/7/2021
 
 #define MICROPY_PY_UHASHLIB 				(0)
 #define MICROPY_PY_UHASHLIB_SHA256 			(0)
@@ -146,11 +153,12 @@
 #define MICROPY_PY_UCRYPTOLIB 				(0)
 #define MICROPY_PY_UCRYPTOLIB_CTR 			(0)
 #define MICROPY_PY_UCRYPTOLIB_CONSTS 		(0)	
+#define MICROPY_PY_NB						(1)
+#define MICROPY_PY_NB_OC					(1)
+#define MICROPY_PY_NB_AEP					(1)
+#define MICROPY_PY_NB_ONENET				(1)
 
 #else
-
-#define MICROPY_PY_USSL                     (1) // (1) for original, modified by Chavis for compilation on 1/7/2021
-#define MICROPY_SSL_MBEDTLS                 (1) // (1) for original, modified by Chavis for compilation on 1/7/2021
 
 #define MICROPY_PY_UHASHLIB 				(1)
 #define MICROPY_PY_UHASHLIB_SHA256 			(1)
@@ -179,7 +187,11 @@
 
 #define MICROPY_NLR_SETJMP                  (1)
 // optimisations
+#if !defined(PLAT_Qualcomm)
 #define MICROPY_OPT_COMPUTED_GOTO           (1)
+#else
+#define MICROPY_OPT_COMPUTED_GOTO           (0)//forrest.liu@20210926 add for dump when python use "param = xxx"
+#endif
 #define MICROPY_OPT_MPZ_BITWISE             (1)
 
 // emitters
@@ -205,7 +217,11 @@ typedef uint32_t mp_uint_t; // must be pointer size
 typedef long mp_off_t;
 
 #if MICROPY_PY_USOCKET_EVENTS
+#if !defined(PLAT_Qualcomm)
 #define MICROPY_PY_USOCKET_EVENTS_HANDLER extern void usocket_events_handler(void); usocket_events_handler();
+#else
+#define MICROPY_PY_USOCKET_EVENTS_HANDLER
+#endif
 #else
 #define MICROPY_PY_USOCKET_EVENTS_HANDLER
 #endif
@@ -221,6 +237,7 @@ extern const struct _mp_obj_module_t mp_module_hmacSha1;
 extern const struct _mp_obj_module_t mp_module_utils;
 extern const struct _mp_obj_type_t mp_ostimer_type;
 extern const struct _mp_obj_module_t mp_module_machine;
+extern const struct _mp_obj_module_t mp_module_nb;
 extern const struct _mp_obj_module_t utime_module;
 extern const struct _mp_obj_module_t mp_module_usocket;
 extern const struct _mp_obj_module_t mp_module_net;
@@ -228,6 +245,7 @@ extern const struct _mp_obj_module_t mp_module_dial;
 extern const struct _mp_obj_module_t mp_module_misc;
 extern const struct _mp_obj_module_t mp_module_quecgnss;
 extern const struct _mp_obj_module_t mp_module_sim;
+extern const struct _mp_obj_module_t mp_module_pm;
 
 #if !defined(PLAT_RDA)
 //extern const struct _mp_obj_module_t mp_module_machine;
@@ -245,7 +263,7 @@ extern const struct _mp_obj_module_t mp_module_audio;
 //extern const struct _mp_obj_module_t mp_module_misc;
 //extern const struct _mp_obj_module_t mp_module_net;
 //extern const struct _mp_obj_module_t mp_module_hmacSha1;
-extern const struct _mp_obj_module_t mp_module_pm;
+//extern const struct _mp_obj_module_t mp_module_pm;
 // end
 //extern const struct _mp_obj_type_t mp_ostimer_type;
 extern const struct _mp_obj_module_t mp_module_sms;
@@ -255,9 +273,17 @@ extern const struct _mp_obj_module_t mp_module_wifiscan;
 
 //#define MICROPY_PORT_BUILTIN_MODULES
 extern const struct _mp_obj_module_t mp_module_bma250;
+
 #endif
 
-#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+#if defined(PLAT_ASR)
+extern const struct _mp_obj_module_t mp_module_ethernet;
+#define MICROPY_PORT_BUILTIN_MODULES_ETHERNET { MP_OBJ_NEW_QSTR(MP_QSTR_ethernet), (mp_obj_t)&mp_module_ethernet },
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_ETHERNET
+#endif
+
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)|| defined(PLAT_RDA) || defined(PLAT_Qualcomm)
 extern const struct _mp_obj_type_t mp_fota_type;
 #define MICROPY_PORT_BUILTIN_MODULES_FOTA { MP_OBJ_NEW_QSTR(MP_QSTR_fota), (mp_obj_t)&mp_fota_type},
 #else
@@ -271,7 +297,7 @@ extern const struct _mp_obj_module_t mp_module_lvgl;
 #define MICROPY_PORT_BUILTIN_MODULES_LVGL
 #endif
 
-#ifdef CONFIG_QUECTHING
+#if defined(CONFIG_QUECTHING) && (defined(PLAT_ASR) || defined(PLAT_Unisoc))
 extern const struct _mp_obj_module_t mp_module_quecIot;
 #define MICROPY_PORT_BUILTIN_MODULES_QUECTHING { MP_OBJ_NEW_QSTR(MP_QSTR_quecIot), (mp_obj_t)&mp_module_quecIot},
 #else
@@ -285,7 +311,7 @@ extern const struct _mp_obj_module_t mp_module_camera;
 #define MICROPY_PORT_BUILTIN_MODULES_CAMERA
 #endif
 
-#if defined(PLAT_Unisoc)
+#if defined(CONFIG_BT)
 extern const struct _mp_obj_module_t mp_module_ble;
 #define MICROPY_PORT_BUILTIN_MODULES_BLE { MP_OBJ_NEW_QSTR(MP_QSTR_ble), (mp_obj_t)&mp_module_ble},
 #else
@@ -313,7 +339,10 @@ extern const struct _mp_obj_module_t mp_module_rtmp;
 #define MICROPY_PORT_BUILTIN_MODULES_RTMP
 #endif
 
-#if defined(BOARD_EC600SCN_LA_VOLTE) || defined(BOARD_EC600NCN_LC_VOLTE) || defined(EC200UCN_AA) || defined(EC200UCN_AB)
+//mia.zhong @20210901
+//#if defined(BOARD_EC600SCN_LA_VOLTE) || defined(BOARD_EC600NCN_LC_VOLTE) || defined(BOARD_EC200UCN_AA) || defined(BOARD_EC200UCN_AB)
+//#if defined(PLAT_ASR) || defined(BOARD_EC600UCN_LB_VOLTE) || defined(BOARD_EC600UEU_AB_VOLTE)
+#if defined(CONFIG_VIOCE_CALL)
 extern const struct _mp_obj_module_t mp_module_voicecall;
 #define MICROPY_PORT_BUILTIN_MODULES_VOICECALL { MP_OBJ_NEW_QSTR(MP_QSTR_voiceCall), (mp_obj_t)&mp_module_voicecall},
 #else
@@ -326,6 +355,30 @@ extern const struct _mp_obj_module_t module_SecureData;
 #else
 #define MICROPY_PORT_BUILTIN_MODULES_SECUREDATA
 #endif
+
+#if defined(PLAT_ASR)
+extern const struct _mp_obj_module_t module_slip;
+#define MICROPY_PORT_BUILTIN_MODULES_SLIP { MP_OBJ_NEW_QSTR(MP_QSTR_slip), (mp_obj_t)&module_slip},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_SLIP
+#endif
+
+#if CONFIG_POC
+extern const struct _mp_obj_module_t mp_module_poc;
+#define MICROPY_PORT_BUILTIN_MODULES_POC { MP_OBJ_NEW_QSTR(MP_QSTR_poc), (mp_obj_t)&mp_module_poc},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_POC
+#endif
+
+#if CONFIG_QRCODE
+extern const struct _mp_obj_module_t mp_module_qrcode;
+#define MICROPY_PORT_BUILTIN_MODULES_QRCODE { MP_OBJ_NEW_QSTR(MP_QSTR_qrcode), (mp_obj_t)&mp_module_qrcode},
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_QRCODE
+#endif
+
+
+
 
 #if defined(PLAT_RDA)
 #define MICROPY_PORT_BUILTIN_MODULES \
@@ -341,8 +394,11 @@ extern const struct _mp_obj_module_t module_SecureData;
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_net), (mp_obj_t)&mp_module_net}, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_misc), (mp_obj_t)&mp_module_misc}, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_sim), (mp_obj_t)&mp_module_sim}, \
-		{ MP_OBJ_NEW_QSTR(MP_QSTR_dial), (mp_obj_t)&mp_module_dial},
-#else
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_pm), (mp_obj_t)&mp_module_pm}, \
+		MICROPY_PORT_BUILTIN_MODULES_FOTA \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_dial), (mp_obj_t)&mp_module_dial}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_nb), (mp_obj_t)&mp_module_nb},  
+#elif !defined(PLAT_Qualcomm)
 #define MICROPY_PORT_BUILTIN_MODULES \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_uos), (mp_obj_t)&uos_module }, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_machine), (mp_obj_t)&mp_module_machine }, \
@@ -364,14 +420,33 @@ extern const struct _mp_obj_module_t module_SecureData;
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_cellLocator), (mp_obj_t)&mp_module_celllocator}, \
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_wifiScan), (mp_obj_t)&mp_module_wifiscan},\
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_audio), (mp_obj_t)&mp_module_audio},\
+		MICROPY_PORT_BUILTIN_MODULES_ETHERNET \
 		MICROPY_PORT_BUILTIN_MODULES_FOTA \
 		MICROPY_PORT_BUILTIN_MODULES_LVGL \
+		MICROPY_PORT_BUILTIN_MODULES_QRCODE \
 		MICROPY_PORT_BUILTIN_MODULES_CAMERA \
 		MICROPY_PORT_BUILTIN_MODULES_BLE \
 		MICROPY_PORT_BUILTIN_MODULES_QUECTHING \
 		MICROPY_PORT_BUILTIN_MODULES_SENSOR \
 		MICROPY_PORT_BUILTIN_MODULES_GNSS \
-		MICROPY_PORT_BUILTIN_MODULES_RTMP
+		MICROPY_PORT_BUILTIN_MODULES_RTMP \
+		MICROPY_PORT_BUILTIN_MODULES_SLIP \
+		MICROPY_PORT_BUILTIN_MODULES_POC
+#else	
+#define MICROPY_PORT_BUILTIN_MODULES \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_uos), (mp_obj_t)&uos_module }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_example), (mp_obj_t)&example_module }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_utime), (mp_obj_t)&utime_module }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_usocket), (mp_obj_t)&mp_module_usocket }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_dial), (mp_obj_t)&mp_module_dial },\
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_machine), (mp_obj_t)&mp_module_machine }, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_misc), (mp_obj_t)&mp_module_misc}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_osTimer), (mp_obj_t)&mp_ostimer_type}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_sim), (mp_obj_t)&mp_module_sim}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_net), (mp_obj_t)&mp_module_net}, \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_pm), (mp_obj_t)&mp_module_pm}, \
+		MICROPY_PORT_BUILTIN_MODULES_FOTA \
+		{ MP_OBJ_NEW_QSTR(MP_QSTR_modem), (mp_obj_t)&mp_module_modem},
 #endif
 
 	// use vfs's functions for import stat and builtin open
@@ -430,15 +505,22 @@ extern const struct _mp_obj_module_t module_SecureData;
 	    const char *readline_hist[8]; \
 	    struct _machine_timer_obj_t *machine_timer_obj_head;
 
+#define STRINGIFY_VALUE(s)  STRINGIFY(s)
+#define STRINGIFY(s) #s
 
-#define MICROPY_HW_BOARD_NAME "EC100Y"
+#define MICROPY_HW_BOARD_NAME STRINGIFY_VALUE(BOARD)
 #define MICROPY_HW_MCU_NAME	"QUECTEL"
 
 // board specifics
-#define MICROPY_PY_SYS_PLATFORM "EC100Y"
+#define MICROPY_PY_SYS_PLATFORM STRINGIFY_VALUE(BOARD)
 
+#if !defined(PLAT_Qualcomm)
 #ifndef SSIZE_MAX
 #define SSIZE_MAX  0xFFFFFFFF
+#endif
+#else
+typedef int intptr_t;
+typedef unsigned int uintptr_t;
 #endif
 
 // We need to provide a declaration/definition of alloca()

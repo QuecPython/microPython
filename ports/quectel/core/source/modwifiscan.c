@@ -24,7 +24,7 @@
 
 #define MOD_WIFISCAN_LOG(msg, ...)      custom_log(wifiscan, msg, ##__VA_ARGS__)
 
-static mp_obj_t g_wifiscan_callback = NULL;
+static c_callback_t *g_wifiscan_callback = NULL;
 
 
 /*=============================================================================*/
@@ -328,7 +328,7 @@ static void qpy_wifiscan_callback(uint8_t msg_id, void *ctx)
 		if (g_wifiscan_callback)
 		{
 			MOD_WIFISCAN_LOG("[wifi-scan] callback start.\r\n");
-			mp_sched_schedule(g_wifiscan_callback, mp_obj_new_tuple(2, tuple));
+			mp_sched_schedule_ex(g_wifiscan_callback, mp_obj_new_tuple(2, tuple));
 			MOD_WIFISCAN_LOG("[wifi-scan] callback end.\r\n");
 		}
 	}
@@ -347,7 +347,11 @@ static void qpy_wifiscan_callback(uint8_t msg_id, void *ctx)
 /*=============================================================================*/
 STATIC mp_obj_t qpy_wifiscan_register_usr_cb(mp_obj_t callback)
 {	
-	g_wifiscan_callback = callback;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+    g_wifiscan_callback = &cb;
+    mp_sched_schedule_callback_register(g_wifiscan_callback, callback);
+
 	Helios_WifiScanInitStruct info = {0};
 	info.user_cb = qpy_wifiscan_callback;
 	Helios_WifiScan_Init(&info);
@@ -355,9 +359,18 @@ STATIC mp_obj_t qpy_wifiscan_register_usr_cb(mp_obj_t callback)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_wifiscan_register_usr_cb_obj, qpy_wifiscan_register_usr_cb);
 
+STATIC mp_obj_t qpy_module_wifiscan_deinit(void)
+{
+	MOD_WIFISCAN_LOG("module wifiScan deinit.\r\n");
+	g_wifiscan_callback = NULL;
+	Helios_WifiScan_Deinit();
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_wifiscan_deinit_obj, qpy_module_wifiscan_deinit);
 
 STATIC const mp_rom_map_elem_t mp_module_wifiscan_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), 	MP_ROM_QSTR(MP_QSTR_wifiScan) 				},
+    { MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_wifiscan_deinit_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_support), 	MP_ROM_PTR(&qpy_wifiscan_support_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_control), 	MP_ROM_PTR(&qpy_wifiscan_control_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_getState), 	MP_ROM_PTR(&qpy_wifiscan_get_state_obj) 	},

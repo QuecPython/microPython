@@ -14,10 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef __UTF8TOGBK_H__
-#define __UTF8TOGBK_H__
+#ifndef _VFS_EFS_H_
+#define _VFS_EFS_H_
 
-int SwitchToGbk(const unsigned char* pszBufIn, int nBufInLen, unsigned char* pszBufOut, int* pnBufOutLen);
+#if defined(PLAT_Qualcomm)
+#include "py/lexer.h"
+#include "py/obj.h"
 
+extern const mp_obj_type_t mp_type_vfs_efs;
+extern const mp_obj_type_t mp_type_vfs_efs_fileio;
+extern const mp_obj_type_t mp_type_vfs_efs_textio;
 
-#endif
+#define EFS_DIR_PATH_ROOT "/datatx/usr"
+
+typedef struct _mp_obj_vfs_efs_t {
+    mp_obj_base_t base;
+	vstr_t cur_dir;
+    vstr_t root;
+    size_t root_len;
+    bool readonly;
+} mp_obj_vfs_efs_t;
+
+mp_obj_t mp_vfs_efs_file_open(mp_obj_t self_in, const mp_obj_type_t *type, mp_obj_t file_in, mp_obj_t mode_in);
+
+#endif // PLAT_Qualcomm
+
+#endif // _VFS_EFS_H_

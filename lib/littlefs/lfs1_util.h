@@ -78,6 +78,9 @@ extern "C"
 #define LFS1_ERROR(fmt, ...)
 #endif
 
+#if defined(PLAT_RDA)
+#define LFS1_NO_INTRINSICS
+#endif
 
 // Runtime assertions
 #ifndef LFS1_NO_ASSERT

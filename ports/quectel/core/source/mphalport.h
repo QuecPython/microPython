@@ -29,6 +29,10 @@
 #define		HAL_TICK1S	16.384
 /*Due to low power consumption of BC25 series, the baud rate needs to be set to 57600, please do not modify.*/
 #define HELIOS_UART_BAUD   HELIOS_UART_BAUD_57600 
+#elif defined(PLAT_Qualcomm)
+#define		HAL_TICK1S	32.768
+#define QPY_REPL_UART   HELIOS_UART0
+#define HELIOS_UART_BAUD   HELIOS_UART_BAUD_115200
 #else
 #define		HAL_TICK1S	32.768
 #define QPY_REPL_UART   HELIOS_UART3
@@ -39,8 +43,10 @@ extern ringbuf_t stdin_ringbuf;
 
 int mp_hal_stdio_init(void);
 uint32_t mp_hal_ticks_ms(void);
-#if !defined(PLAT_RDA)
+#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
 void quecpython_send_msg_to_sleep_func(void);
 mp_uint_t quecpython_sleep_deal_fun(mp_uint_t ms);
 #endif
+void mp_hal_port_open(uint8_t state);
+
 #endif //__MP_HAL_PORT_H__

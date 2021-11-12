@@ -38,7 +38,7 @@ WHEN		WHO			WHAT,WHERE,WHY
 #include "helios_voicecall.h"
 
 
-#define QPY_MODSMS_LOG(msg, ...)      custom_log("VOICECALL", msg, ##__VA_ARGS__)
+#define QPY_MODVOICECALL_LOG(msg, ...)      custom_log("VOICECALL", msg, ##__VA_ARGS__)
 
 //auto answer
 STATIC mp_obj_t qpy_voicecall_auto_answer(mp_obj_t mp_obj_seconds)
@@ -115,7 +115,85 @@ STATIC mp_obj_t qpy_voicecall_fw_set(mp_obj_t mp_obj_reason, mp_obj_t mp_obj_fwm
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(qpy_voice_call_fw_set_obj, qpy_voicecall_fw_set);
 
-static mp_obj_t g_voice_call_callback;
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+STATIC mp_obj_t qpy_voice_call_set_auto_record(size_t n_args, const mp_obj_t *args)
+{
+    int enable = mp_obj_get_int(args[0]);
+    int record_type = mp_obj_get_int(args[1]);
+    int record_mode = mp_obj_get_int(args[2]);
+	char *filename = (char *)mp_obj_str_get_str(args[3]);
+
+    if ((enable != 0) && (enable != 1))
+        mp_raise_ValueError("invalid value.<enable> should be [0 or 1]");
+    if (record_type < 0 || record_type > 1)
+        mp_raise_ValueError("invalid value.<record_type> should be [0 or 1]");
+    if (record_mode < 0 || record_mode > 2)
+        mp_raise_ValueError("invalid value.<record_mode> should be [0 ~ 2]");
+    if (filename == NULL)
+        mp_raise_ValueError("invalid value.<filename> must not be NULL");
+    
+    Helios_Voicecall_Record_Process_t param = {0};
+    param.record_type = record_type;
+    param.record_mode = record_mode;
+    strncpy(param.filename, filename, strlen(filename));
+	HELIOS_VC_ERROR_CODE ret = Helios_Voicecall_Set_Auto_Record(enable, &param);
+	if (ret == HELIOS_VC_SUCCESS)
+        return mp_obj_new_int(0);
+    else if (ret == HELIOS_VC_FAILURE)
+        return mp_obj_new_int(-1);
+    else if (ret == HELIOS_VC_NOT_SUPPORT)
+        return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
+    else
+        return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_voice_call_set_auto_record_obj, 4, 4, qpy_voice_call_set_auto_record);
+
+STATIC mp_obj_t qpy_voice_call_start_record(mp_obj_t mp_obj_recordtype, mp_obj_t mp_obj_recordmode, mp_obj_t mp_obj_filename)
+{
+    int record_type = mp_obj_get_int(mp_obj_recordtype);
+    int record_mode = mp_obj_get_int(mp_obj_recordmode);
+	char *filename = (char *)mp_obj_str_get_str(mp_obj_filename);
+
+    if (record_type < 0 || record_type > 1)
+        mp_raise_ValueError("invalid value.<record_type> should be [0 or 1]");
+    if (record_mode < 0 || record_mode > 2)
+        mp_raise_ValueError("invalid value.<record_mode> should be [0 ~ 2]");
+    if (filename == NULL)
+        mp_raise_ValueError("invalid value.<filename> must not be NULL");
+    
+    Helios_Voicecall_Record_Process_t param = {0};
+    param.record_type = record_type;
+    param.record_mode = record_mode;
+    strncpy(param.filename, filename, strlen(filename));
+    
+	HELIOS_VC_ERROR_CODE ret = Helios_VoiceCall_Start_Record(&param);
+    if (ret == HELIOS_VC_SUCCESS)
+        return mp_obj_new_int(0);
+    else if (ret == HELIOS_VC_FAILURE)
+        return mp_obj_new_int(-1);
+    else if (ret == HELIOS_VC_NOT_SUPPORT)
+        return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
+    else
+        return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(qpy_voice_call_start_record_obj, qpy_voice_call_start_record);
+
+STATIC mp_obj_t qpy_voice_call_stop_record()
+{   
+	HELIOS_VC_ERROR_CODE ret = Helios_VoiceCall_Stop_Record();
+	if (ret == HELIOS_VC_SUCCESS)
+        return mp_obj_new_int(0);
+    else if (ret == HELIOS_VC_FAILURE)
+        return mp_obj_new_int(-1);
+    else if (ret == HELIOS_VC_NOT_SUPPORT)
+        return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
+    else
+        return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_voice_call_stop_record_obj, qpy_voice_call_stop_record);
+#endif
+
+static c_callback_t *g_voice_call_callback = NULL;
 
 static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *ctx)
 {
@@ -139,7 +217,7 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
                 };
         		if (g_voice_call_callback)
         		{
-        			mp_sched_schedule(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
         		}
             }
         }
@@ -161,7 +239,7 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
                 };
         		if (g_voice_call_callback)
         		{
-        			mp_sched_schedule(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
         		}
             }
         }
@@ -180,7 +258,7 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
                 };
         		if (g_voice_call_callback)
         		{
-        			mp_sched_schedule(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
         		}
             }
         }
@@ -203,7 +281,58 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
                 };
         		if (g_voice_call_callback)
         		{
-        			mp_sched_schedule(g_voice_call_callback, mp_obj_new_tuple(5, tuple));
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(5, tuple));
+        		}
+            }
+        }
+        break;
+        
+        case HELIOS_VC_DIALING_IND:
+        {
+    		if (g_voice_call_callback)
+    		{
+    			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_int(event_id));
+    		}
+        }
+        break;
+
+	    case HELIOS_VC_MO_FAILED_IND:
+        {
+            Helios_call_mo_failed *vc_info = (Helios_call_mo_failed *)ctx;
+            if (ctx)
+            {
+                mp_obj_t tuple[4] =
+                {
+                    mp_obj_new_int(event_id),
+                    mp_obj_new_int(vc_info->CallId),
+                    mp_obj_new_int(vc_info->Cause),
+                    mp_obj_new_int(vc_info->InBandTones)
+                };
+        		if (g_voice_call_callback)
+        		{
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(4, tuple));
+        		}
+            }
+        }
+        break;
+
+        case HELIOS_VC_HOLDING_IND:
+        {
+            Helios_call_holding *vc_info = (Helios_call_holding *)ctx;
+            if (ctx)
+            {
+                char phone_num[20] = {0};
+                memcpy(phone_num, vc_info->phone_num, strlen(vc_info->phone_num));
+                
+                mp_obj_t tuple[3] =
+                {
+                    mp_obj_new_int(event_id),
+                    mp_obj_new_int(vc_info->CallId),
+                    mp_obj_new_str(phone_num,strlen(phone_num))
+                };
+        		if (g_voice_call_callback)
+        		{
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(3, tuple));
         		}
             }
         }
@@ -213,6 +342,9 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
 	    case HELIOS_VC_CONNECT_VOLTE_IND:
 	    case HELIOS_VC_NOCARRIER_VOLTE_IND:
 	    case HELIOS_VC_CCWA_VOLTE_IND:
+        case HELIOS_VC_DIALING_VOLTE_IND:
+	    case HELIOS_VC_ALERTING_VOLTE_IND:
+	    case HELIOS_VC_HOLDING_VOLTE_IND:
         {
             Helios_call_volte *vc_info = (Helios_call_volte *)ctx;
             if (ctx)
@@ -233,7 +365,7 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
                 };
         		if (g_voice_call_callback)
         		{
-        			mp_sched_schedule(g_voice_call_callback, mp_obj_new_tuple(9, tuple));
+        			mp_sched_schedule_ex(g_voice_call_callback, mp_obj_new_tuple(9, tuple));
         		}
             }
         }
@@ -247,24 +379,45 @@ static void ql_voice_call_EventHandler(uint8_t sim_id, int32_t event_id, void *c
 STATIC mp_obj_t qpy_voicecall_add_event_handler(mp_obj_t handler)
 {
     Helios_VoiceCallInitStruct info = {0};
-	
+	static c_callback_t cb = {0};
+	memset(&cb, 0, sizeof(c_callback_t));
 	info.user_cb = ql_voice_call_EventHandler;
-	g_voice_call_callback = handler;
+	//g_voice_call_callback = handler;
+	
+	g_voice_call_callback = &cb;
+	mp_sched_schedule_callback_register(g_voice_call_callback, handler);
 	Helios_VoiceCall_Register(&info);
 	
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_voicecall_add_event_handler_obj, qpy_voicecall_add_event_handler);
 
+STATIC mp_obj_t qpy_module_voicecall_deinit(void)
+{
+	g_voice_call_callback = NULL;
+	Helios_VoiceCallInitStruct info = {0};
+	info.user_cb = NULL;
+	Helios_VoiceCall_Register(&info);
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_voicecall_deinit_obj, qpy_module_voicecall_deinit);
+
+
 STATIC const mp_rom_map_elem_t mp_module_voicecall_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__),           MP_ROM_QSTR(MP_QSTR_voiceCall) },
-	{ MP_ROM_QSTR(MP_QSTR_setAutoAnswer),         MP_ROM_PTR(&qpy_voice_auto_answer_obj) },
-    { MP_ROM_QSTR(MP_QSTR_callStart),      MP_ROM_PTR(&qpy_voice_call_start_obj) },
-    { MP_ROM_QSTR(MP_QSTR_callAnswer),       MP_ROM_PTR(&qpy_voice_call_answer_obj) },
-    { MP_ROM_QSTR(MP_QSTR_callEnd),       MP_ROM_PTR(&qpy_voice_call_end_obj) },
-    { MP_ROM_QSTR(MP_QSTR_startDtmf),       MP_ROM_PTR(&qpy_voice_call_start_dtmf_obj) },
-    { MP_ROM_QSTR(MP_QSTR_setFw),         MP_ROM_PTR(&qpy_voice_call_fw_set_obj) },
-	{ MP_ROM_QSTR(MP_QSTR_setCallback),        MP_ROM_PTR(&qpy_voicecall_add_event_handler_obj) },
+    { MP_ROM_QSTR(MP_QSTR___name__),                MP_ROM_QSTR(MP_QSTR_voiceCall) },
+    { MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_voicecall_deinit_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setAutoAnswer),           MP_ROM_PTR(&qpy_voice_auto_answer_obj) },
+    { MP_ROM_QSTR(MP_QSTR_callStart),               MP_ROM_PTR(&qpy_voice_call_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_callAnswer),              MP_ROM_PTR(&qpy_voice_call_answer_obj) },
+    { MP_ROM_QSTR(MP_QSTR_callEnd),                 MP_ROM_PTR(&qpy_voice_call_end_obj) },
+    { MP_ROM_QSTR(MP_QSTR_startDtmf),               MP_ROM_PTR(&qpy_voice_call_start_dtmf_obj) },
+    { MP_ROM_QSTR(MP_QSTR_setFw),                   MP_ROM_PTR(&qpy_voice_call_fw_set_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setCallback),             MP_ROM_PTR(&qpy_voicecall_add_event_handler_obj) },
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+	{ MP_ROM_QSTR(MP_QSTR_setAutoRecord),           MP_ROM_PTR(&qpy_voice_call_set_auto_record_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_startRecord),             MP_ROM_PTR(&qpy_voice_call_start_record_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_stopRecord),              MP_ROM_PTR(&qpy_voice_call_stop_record_obj) },
+#endif
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_voicecall_globals, mp_module_voicecall_globals_table);
 

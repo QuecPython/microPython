@@ -311,7 +311,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_datacall_get_info_obj, 1, 2, qpy_
 
 
 
-static mp_obj_t g_usr_callback = NULL;
+static c_callback_t * g_usr_callback = NULL;
 
 static void datacall_callback(int32_t profile_idx, uint8_t sim_id, int32_t nw_status)
 {
@@ -325,7 +325,7 @@ static void datacall_callback(int32_t profile_idx, uint8_t sim_id, int32_t nw_st
 	if (g_usr_callback)
 	{
 		MOD_DATACALL_LOG("[datacall] callback start.\r\n");
-		mp_sched_schedule(g_usr_callback, mp_obj_new_tuple(3, tuple));
+		mp_sched_schedule_ex(g_usr_callback, mp_obj_new_tuple(3, tuple));
 		MOD_DATACALL_LOG("[datacall] callback end.\r\n");
 	}
 }
@@ -343,7 +343,11 @@ static void datacall_callback(int32_t profile_idx, uint8_t sim_id, int32_t nw_st
 /*=============================================================================*/
 STATIC mp_obj_t qpy_datacall_register_usr_callback(mp_obj_t callback)
 {	
-	g_usr_callback = callback;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_usr_callback = &cb;
+	mp_sched_schedule_callback_register(g_usr_callback, callback);
+	
     Helios_DataCallInitStruct DataCallInitStruct = {datacall_callback};
     Helios_DataCall_Init((int32_t)Helios_DataCall_GetCurrentPDP(), 0, &DataCallInitStruct);
 	return mp_obj_new_int(0);
@@ -364,10 +368,41 @@ STATIC mp_obj_t qpy_datacall_get_pdp_range(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_get_pdp_range_obj, qpy_datacall_get_pdp_range);
 
+//#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+STATIC mp_obj_t qpy_datacall_get_apn(mp_obj_t simid)
+{
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+    int sim_id = mp_obj_get_int(simid);
+	int ret = 0;
+	char apn[99+1] = {0};
+	
+	ret = Helios_DataCall_GetApn(sim_id, apn);
+	if (ret == 0)
+	{
+		return mp_obj_new_str(apn, strlen(apn));
+	}
+	return mp_obj_new_int(-1);
+#else
+    return mp_obj_new_int(-1);
+#endif
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_datacall_get_apn_obj, qpy_datacall_get_apn);
+//#endif
 
+STATIC mp_obj_t qpy_module_datacall_deinit(void)
+{
+	g_usr_callback = NULL;
+    MOD_DATACALL_LOG("module datacall deinit.\r\n");
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+	Helios_DataCall_Deinit();
+#endif
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_datacall_deinit_obj, qpy_module_datacall_deinit);
 
 STATIC const mp_rom_map_elem_t mp_module_datacall_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR___name__),		MP_ROM_QSTR(MP_QSTR_dial) },
+	{ MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_datacall_deinit_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_start),			MP_ROM_PTR(&qpy_datacall_start_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setAutoConnect),	MP_ROM_PTR(&qpy_datacall_set_autoconnect_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_getInfo),			MP_ROM_PTR(&qpy_datacall_get_info_obj) },
@@ -375,6 +410,9 @@ STATIC const mp_rom_map_elem_t mp_module_datacall_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_recordApn),		MP_ROM_PTR(&qpy_datacall_record_apn_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setAsynMode),		MP_ROM_PTR(&qpy_datacall_set_asynmode_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_getPdpRange),		MP_ROM_PTR(&qpy_get_pdp_range_obj) },
+	//#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+	{ MP_ROM_QSTR(MP_QSTR_getApn), 	        MP_ROM_PTR(&qpy_datacall_get_apn_obj) },
+	//#endif
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_datacall_globals, mp_module_datacall_globals_table);
 

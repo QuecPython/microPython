@@ -34,6 +34,9 @@ extern const mp_obj_type_t misc_power_type;
 extern const mp_obj_type_t misc_pwm_type;
 extern const mp_obj_type_t misc_adc_type;
 extern const mp_obj_type_t misc_usb_type;
+#if defined(PLAT_ASR)
+extern const mp_obj_module_t misc_usbnet_module;
+#endif
 extern const mp_obj_type_t misc_powerkey_type;
 
 

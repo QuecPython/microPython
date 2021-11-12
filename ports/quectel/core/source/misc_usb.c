@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "mpconfigport.h"
 #include "obj.h"
 #include "compile.h"
@@ -32,7 +33,8 @@ typedef struct _misc_usb_obj_t
 }misc_usb_obj_t;
 
 
-static mp_obj_t g_py_callback = NULL;
+static c_callback_t *g_py_callback = NULL;
+static misc_usb_obj_t *usb_obj = NULL;
 
 
 static void ql_usb_detect_handler(Helios_USB_Status_e status)
@@ -40,14 +42,18 @@ static void ql_usb_detect_handler(Helios_USB_Status_e status)
 	if (g_py_callback)
 	{
 		HELIOS_MODUSB_LOG("callback start, status = %u.\r\n", status);
-		mp_sched_schedule(g_py_callback, mp_obj_new_int(status));
+		mp_sched_schedule_ex(g_py_callback, mp_obj_new_int(status));
 		HELIOS_MODUSB_LOG("callback end.\r\n");
 	}
 }
 
 STATIC mp_obj_t misc_usb_register_cb(mp_obj_t self_in, mp_obj_t usr_callback)
 {
-	g_py_callback = usr_callback;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_py_callback = &cb;
+	mp_sched_schedule_callback_register(g_py_callback, usr_callback);
+	
 	Helios_USBInitStruct info = {ql_usb_detect_handler};
 	int ret = Helios_USB_Init(&info);
 	return mp_obj_new_int(ret);
@@ -62,10 +68,20 @@ STATIC mp_obj_t misc_usb_get_status(mp_obj_t self_in)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(misc_usb_get_status_obj, misc_usb_get_status);
 
+STATIC mp_obj_t misc_usb__Deint(mp_obj_t self_in)
+{
+	int ret = -1;
+	g_py_callback = NULL;
+	usb_obj = NULL;
+	ret = Helios_USB_DeInit();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(misc_usb__del__obj, misc_usb__Deint);
 
 
 
 STATIC const mp_rom_map_elem_t misc_usb_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR___del__), 	MP_ROM_PTR(&misc_usb__del__obj) },
 	{ MP_ROM_QSTR(MP_QSTR_getStatus), MP_ROM_PTR(&misc_usb_get_status_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setCallback), MP_ROM_PTR(&misc_usb_register_cb_obj) },
 };
@@ -84,8 +100,14 @@ const mp_obj_type_t misc_usb_type = {
 STATIC mp_obj_t misc_usb_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) 
 {
     mp_arg_check_num(n_args, n_kw, 0, MP_OBJ_FUN_ARGS_MAX, true);
-    
-    misc_usb_obj_t *self = m_new_obj(misc_usb_obj_t);
+	misc_usb_obj_t *self = NULL;
+
+	if(usb_obj == NULL)
+	{
+		usb_obj = m_new_obj_with_finaliser(misc_usb_obj_t);
+	}
+	
+    self = usb_obj;
     self->base.type = &misc_usb_type;
 	
     return MP_OBJ_FROM_PTR(self);

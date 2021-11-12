@@ -23,7 +23,9 @@ extern "C" {
 
 #include "obj.h"
 
+#if defined(CONFIG_TTS)
 extern const mp_obj_type_t audio_tts_type;
+#endif
 extern const mp_obj_type_t audio_audio_type;
 extern const mp_obj_type_t audio_record_type;
 

@@ -31,7 +31,7 @@ STATIC mp_obj_t misc_power_reset()
 {
 	int ret = 1;
 	Helios_Power_Reset(ret);
-	return mp_const_true;
+	return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_power_reset_obj, misc_power_reset);
 
@@ -40,10 +40,9 @@ STATIC mp_obj_t misc_power_down()
 {
 	int ret = 1;
 	Helios_Power_Down(ret);
-	return mp_const_true;
+	return mp_const_none;
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_power_down_obj, misc_power_down);
-
 
 STATIC mp_obj_t misc_power_get_down_reason()
 {
@@ -51,8 +50,10 @@ STATIC mp_obj_t misc_power_get_down_reason()
 	ret = Helios_Power_GetDownReason();
 	return mp_obj_new_int(ret);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_power_get_down_reason_obj, misc_power_get_down_reason);
 
+#if !defined(PLAT_RDA)
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_power_get_down_reason_obj, misc_power_get_down_reason);
+#endif
 
 STATIC mp_obj_t misc_power_get_up_reason()
 {
@@ -71,13 +72,14 @@ STATIC mp_obj_t misc_power_get_batt()
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_power_get_batt_obj, misc_power_get_batt);
 
-
 STATIC const mp_rom_map_elem_t misc_power_locals_dict_table[] = {
 	{ MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_misc) },
 	{ MP_ROM_QSTR(MP_QSTR_powerRestart), MP_ROM_PTR(&misc_power_reset_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_powerDown), MP_ROM_PTR(&misc_power_down_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_powerOnReason), MP_ROM_PTR(&misc_power_get_up_reason_obj) },
+#if !defined(PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_powerDownReason), MP_ROM_PTR(&misc_power_get_down_reason_obj) },
+#endif	
 	{ MP_ROM_QSTR(MP_QSTR_getVbatt), MP_ROM_PTR(&misc_power_get_batt_obj) },
 };
 

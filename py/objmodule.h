@@ -36,6 +36,8 @@ void mp_module_register(qstr qstr, mp_obj_t module);
 
 mp_obj_t mp_module_search_umodule(const char *module_str);
 
+void mp_module_deinit_all(void);
+
 #if MICROPY_MODULE_BUILTIN_INIT
 void mp_module_call_init(qstr module_name, mp_obj_t module_obj);
 #else

@@ -31,11 +31,13 @@
 //#include "mdns.h"
 //#include "modnetwork.h"
 
+#if !defined(PLAT_Qualcomm)
 #include "sockets.h"
 #include "netdb.h"
 #include "ip4.h"
 #include "igmp.h"
 #include "netif.h"
+#endif
 #include "helios_debug.h"
 #if !defined(PLAT_RDA)
 #include "helios_datacall.h"
@@ -51,6 +53,10 @@
 //#define lwip_sendto lwip_sendto_r
 //#define lwip_close lwip_close_r
 //#endif
+
+#if defined(PLAT_Qualcomm)
+#define TCP_KEEPALIVE 0x02
+#endif
 
 #define QPY_SOCKET_LOG(msg, ...)      custom_log(modsocket, msg, ##__VA_ARGS__)
 
@@ -68,6 +74,7 @@ typedef struct _socket_obj_t {
     uint8_t proto;
     bool peer_closed;
     unsigned int retries;
+    unsigned int timeout;
     #if MICROPY_PY_USOCKET_EVENTS
     mp_obj_t events_callback;
     struct _socket_obj_t *events_next;
@@ -91,7 +98,7 @@ void _socket_settimeout(socket_obj_t *sock, uint64_t timeout_ms);
 
 STATIC uint8_t usocket_events_divisor;
 STATIC socket_obj_t *usocket_events_head;
-STATIC uint32_t usocket_timeout = 0;
+//STATIC uint32_t usocket_timeout = 0;
 
 void usocket_events_deinit(void) {
     usocket_events_head = NULL;
@@ -166,25 +173,36 @@ static inline void check_for_exceptions(void) {
 // This function mimics lwip_getaddrinfo, with added support for mDNS queries
 static int _socket_getaddrinfo3(const char *nodename, const char *servname,
     const struct addrinfo *hints, struct addrinfo **res) {
-
-    // Normal query
-    //uart_printf("getaddrinfo_with_pcid, nodename %s, servname %s\r\n", nodename, servname);
-	/*
-	** Jayceon 2020/12/03 --part1 begin--
-	** Solve the problem of not being able to connect to the Internet after dialing 
-	** with a PDP other than the first PDP . 
-	*/
-#if defined(PLAT_RDA)
-	int pdp = 1;
-#else
-	int pdp = Helios_DataCall_GetCurrentPDP();
+#if defined(PLAT_ASR)
+    if (netif_get_default_nw()) {
+        return getaddrinfo(nodename, servname, hints, res);
+    } else {
 #endif
-    return getaddrinfo_with_pcid(nodename, servname, hints, res, pdp);
-	/* Jayceon 2020/12/03 --part1 end-- */
+        // Normal query
+        //uart_printf("getaddrinfo_with_pcid, nodename %s, servname %s\r\n", nodename, servname);
+        /*
+        ** Jayceon 2020/12/03 --part1 begin--
+        ** Solve the problem of not being able to connect to the Internet after dialing 
+        ** with a PDP other than the first PDP . 
+        */
+    #if defined(PLAT_RDA) || defined(PLAT_Qualcomm)
+        int pdp = 1;
+    #else
+        int pdp = Helios_DataCall_GetCurrentPDP();
+    #endif
+
+        return getaddrinfo_with_pcid(nodename, servname, hints, res, pdp);
+        /* Jayceon 2020/12/03 --part1 end-- */
+#if defined(PLAT_ASR)
+    }
+#endif
 }
 
 static int _socket_getaddrinfo2(const mp_obj_t host, const mp_obj_t portx, struct addrinfo **resp) {
     const struct addrinfo hints = {
+#if defined(PLAT_Qualcomm)
+        .ai_flags = AI_CANONNAME,
+#endif
         .ai_family = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
     };
@@ -244,85 +262,101 @@ STATIC mp_obj_t socket_make_new(const mp_obj_type_t *type_in, size_t n_args, siz
     sock->fd = lwip_socket(sock->domain, sock->type, sock->proto);
     if (sock->fd < 0) {
 		QPY_SOCKET_LOG("lwip_socket: create socket failed!\r\n");
-        exception_from_errno(errno);
-    }
-	/*
-	** Jayceon 2020/12/03 --part2 begin--
-	** Solve the problem of not being able to connect to the Internet after dialing 
-	** with a PDP other than the first PDP . 
-	*/
-#if defined(PLAT_RDA)
-	int pdp = 1;
-	struct netif* netif_cfg = netif_get_by_cid(pdp);
+#if defined(PLAT_Qualcomm)
+        exception_from_errno(errno(sock->fd));
 #else
-	int pdp = Helios_DataCall_GetCurrentPDP();
-#if defined (PLAT_Unisoc)
-    struct netif* netif_cfg = netif_get_by_cid(pdp);
-#elif defined (PLAT_ASR)
-    struct netif* netif_cfg = netif_get_by_cid(pdp - 1);
+        exception_from_errno(errno);
 #endif
-#endif
-
-    /* Jayceon 2020/12/03 --part2 end-- */
-    if(netif_cfg)
-    {
-        if (sock->domain == AF_INET)
-        {
-            struct sockaddr_in local_v4;
-            local_v4.sin_family = AF_INET;
-            local_v4.sin_port = 0;
-#if defined (PLAT_Unisoc) || defined(PLAT_RDA)
-            local_v4.sin_addr.s_addr = netif_cfg->ip_addr.u_addr.ip4.addr;
-#elif defined (PLAT_ASR)
-            local_v4.sin_addr.s_addr = netif_cfg->ip_addr.addr;
-#endif
-            if(lwip_bind(sock->fd,(struct sockaddr *)&local_v4,sizeof(struct sockaddr)))
-            {
-                //bind failed.
-                QPY_SOCKET_LOG("[socket]bind IPV4 failed.\r\n");
-                exception_from_errno(errno);
-            }
-            else
-            {
-                QPY_SOCKET_LOG("[socket]bind IPV4 success.\r\n");
-            }
-        }
-        else if (sock->domain == AF_INET6)
-        {
-            struct sockaddr_in6 local_v6;
-
-#if defined (PLAT_Unisoc)
-            const ip6_addr_t * ip6_addr_ptr = NULL;
-            ip6_addr_ptr = netif_ip6_addr(netif_cfg, 1);
-            memcpy(&local_v6.sin6_addr, ip6_addr_ptr, sizeof(ip6_addr_t));
-#elif defined (PLAT_ASR)
-            ip6_addr_t * ip6_addr_ptr = NULL;
-            ip6_addr_ptr = netif_get_global_ip6addr(netif_cfg);
-            memcpy(&local_v6.sin6_addr, ip6_addr_ptr, sizeof(ip6_addr_t));
-#endif
-            local_v6.sin6_family = AF_INET6;
-            local_v6.sin6_port = 0;
-            if(lwip_bind(sock->fd,(struct sockaddr *)&local_v6,sizeof(struct sockaddr_in6)))
-            {
-                //bind failed.
-                QPY_SOCKET_LOG("[socket]bind IPV6 failed.\r\n");
-                exception_from_errno(errno);
-            }
-            else
-            {
-                QPY_SOCKET_LOG("[socket]bind IPV6 success.\r\n");
-            }
-        }
-    }
-    else
-    {
-        QPY_SOCKET_LOG("[socket]find netif cfg failed..\r\n");
     }
 
-    //end
+#if defined(PLAT_Qualcomm)
+    _socket_settimeout(sock, UINT64_MAX);
+    return MP_OBJ_FROM_PTR(sock);
+#else
+#if defined(PLAT_ASR)
+    if (!netif_get_default_nw()) {
+#endif
+    	/*
+    	** Jayceon 2020/12/03 --part2 begin--
+    	** Solve the problem of not being able to connect to the Internet after dialing 
+    	** with a PDP other than the first PDP . 
+    	*/
+    #if defined(PLAT_RDA)
+        int pdp = 1;
+        struct netif* netif_cfg = netif_get_by_cid(pdp);
+    #else
+        int pdp = Helios_DataCall_GetCurrentPDP();
+    #if defined (PLAT_Unisoc)
+        struct netif* netif_cfg = netif_get_by_cid(pdp);
+    #elif defined (PLAT_ASR)
+        struct netif* netif_cfg = netif_get_by_cid(pdp - 1);
+    #endif
+    #endif
+
+        /* Jayceon 2020/12/03 --part2 end-- */
+        if(netif_cfg)
+        {
+            if (sock->domain == AF_INET)
+            {
+                struct sockaddr_in local_v4;
+                local_v4.sin_family = AF_INET;
+                local_v4.sin_port = 0;
+    #if defined (PLAT_Unisoc) || defined(PLAT_RDA)
+                local_v4.sin_addr.s_addr = netif_cfg->ip_addr.u_addr.ip4.addr;
+    #elif defined (PLAT_ASR)
+                local_v4.sin_addr.s_addr = netif_cfg->ip_addr.addr;
+    #endif
+                if(lwip_bind(sock->fd,(struct sockaddr *)&local_v4,sizeof(struct sockaddr)))
+                {
+                    //bind failed.
+                    QPY_SOCKET_LOG("[socket]bind IPV4 failed.\r\n");
+                    exception_from_errno(errno);
+                }
+                else
+                {
+                    QPY_SOCKET_LOG("[socket]bind IPV4 success.\r\n");
+                }
+            }
+            else if (sock->domain == AF_INET6)
+            {
+                struct sockaddr_in6 local_v6;
+
+    #if defined (PLAT_Unisoc)
+                const ip6_addr_t * ip6_addr_ptr = NULL;
+                ip6_addr_ptr = netif_ip6_addr(netif_cfg, 1);
+                memcpy(&local_v6.sin6_addr, ip6_addr_ptr, sizeof(ip6_addr_t));
+    #elif defined (PLAT_ASR)
+                ip6_addr_t * ip6_addr_ptr = NULL;
+                ip6_addr_ptr = netif_get_global_ip6addr(netif_cfg);
+                memcpy(&local_v6.sin6_addr, ip6_addr_ptr, sizeof(ip6_addr_t));
+    #endif
+                local_v6.sin6_family = AF_INET6;
+                local_v6.sin6_port = 0;
+                if(lwip_bind(sock->fd,(struct sockaddr *)&local_v6,sizeof(struct sockaddr_in6)))
+                {
+                    //bind failed.
+                    QPY_SOCKET_LOG("[socket]bind IPV6 failed.\r\n");
+                    exception_from_errno(errno);
+                }
+                else
+                {
+                    QPY_SOCKET_LOG("[socket]bind IPV6 success.\r\n");
+                }
+            }
+        }
+        else
+        {
+            QPY_SOCKET_LOG("[socket]find netif cfg failed..\r\n");
+        }
+
+        //end
+#if defined(PLAT_ASR)
+    }
+#endif
     _socket_settimeout(sock, UINT64_MAX);
 
     return MP_OBJ_FROM_PTR(sock);
+#endif
 }
 
 STATIC mp_obj_t socket_bind(const mp_obj_t arg0, const mp_obj_t arg1) {
@@ -332,7 +366,11 @@ STATIC mp_obj_t socket_bind(const mp_obj_t arg0, const mp_obj_t arg1) {
     int r = lwip_bind(self->fd, res->ai_addr, res->ai_addrlen);
     lwip_freeaddrinfo(res);
     if (r < 0) {
+#if defined(PLAT_Qualcomm)
+        exception_from_errno(errno(self->fd));
+#else
         exception_from_errno(errno);
+#endif
     }
     return mp_const_none;
 }
@@ -343,7 +381,11 @@ STATIC mp_obj_t socket_listen(const mp_obj_t arg0, const mp_obj_t arg1) {
     int backlog = mp_obj_get_int(arg1);
     int r = lwip_listen(self->fd, backlog);
     if (r < 0) {
+#if defined(PLAT_Qualcomm)
+        exception_from_errno(errno(self->fd));
+#else
         exception_from_errno(errno);
+#endif
     }
     return mp_const_none;
 }
@@ -363,9 +405,16 @@ STATIC mp_obj_t socket_accept(const mp_obj_t arg0) {
         if (new_fd >= 0) {
             break;
         }
+#if defined(PLAT_Qualcomm)
+        int socket_error = errno(self->fd);
+        if (socket_error != 11) {
+            exception_from_errno(socket_error);
+        }
+#else
         if (errno != EAGAIN) {
             exception_from_errno(errno);
         }
+#endif
         check_for_exceptions();
     }
     if (new_fd < 0) {
@@ -397,15 +446,40 @@ STATIC mp_obj_t socket_accept(const mp_obj_t arg0) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(socket_accept_obj, socket_accept);
 
+#if defined(PLAT_Qualcomm)
+#define _htons(x) \
+        ((unsigned short)((((unsigned short)(x) & 0x00ff) << 8) | \
+                  (((unsigned short)(x) & 0xff00) >> 8)))
+#endif
+
 STATIC mp_obj_t socket_connect(const mp_obj_t arg0, const mp_obj_t arg1) {
     socket_obj_t *self = MP_OBJ_TO_PTR(arg0);
-    struct addrinfo *res;
     int r;
+#if defined(PLAT_Qualcomm)
+    MP_THREAD_GIL_EXIT();
+
+    mp_obj_t *elem;
+    mp_obj_get_array_fixed_n(arg1, 2, &elem);
+    const char *host_str = mp_obj_str_get_str(elem[0]);
+
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = _htons(mp_obj_get_int(elem[1]));
+    server_addr.sin_addr.s_addr = inet_addr(host_str);
+
+    r = lwip_connect(self->fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    MP_THREAD_GIL_ENTER();
+    if (r != 0) 
+    {
+        exception_from_errno(errno(self->fd));
+    }
+#else
+    struct addrinfo *res;
     _socket_getaddrinfo(arg1, &res);
     MP_THREAD_GIL_EXIT();
-    if (usocket_timeout > 0 && usocket_timeout < 25)
+    if (self->timeout > 0 && self->timeout < 25)
     {
-        QPY_SOCKET_LOG("socket_connect usocket_timeout = %d \r\n", usocket_timeout);
+        QPY_SOCKET_LOG("socket_connect usocket timeout = %d \r\n", self->timeout);
         int sock_nbio = 1;
         struct timeval t;
         fd_set read_fds, write_fds;
@@ -415,7 +489,7 @@ STATIC mp_obj_t socket_connect(const mp_obj_t arg0, const mp_obj_t arg1) {
 
         FD_SET(self->fd, &read_fds);
         FD_SET(self->fd, &write_fds);
-        t.tv_sec = usocket_timeout;
+        t.tv_sec = self->timeout;
         t.tv_usec = 0;
         
         lwip_ioctl(self->fd, FIONBIO, &sock_nbio);
@@ -453,6 +527,7 @@ STATIC mp_obj_t socket_connect(const mp_obj_t arg0, const mp_obj_t arg1) {
 
     MP_THREAD_GIL_ENTER();
     lwip_freeaddrinfo(res);
+#endif
 
     return mp_const_none;
 }
@@ -470,7 +545,11 @@ STATIC mp_obj_t socket_setsockopt(size_t n_args, const mp_obj_t *args) {
             int val = mp_obj_get_int(args[3]);
             int ret = lwip_setsockopt(self->fd, SOL_SOCKET, opt, &val, sizeof(int));
             if (ret != 0) {
+#if defined(PLAT_Qualcomm)
+                exception_from_errno(errno(self->fd));
+#else
                 exception_from_errno(errno);
+#endif
             }
             break;
         }
@@ -492,7 +571,11 @@ STATIC mp_obj_t socket_setsockopt(size_t n_args, const mp_obj_t *args) {
                 optval = 3;
                 ret = lwip_setsockopt(self->fd, IPPROTO_TCP, TCP_KEEPCNT, &optval, sizeof(int));
                 if (ret != 0) {
+#if defined(PLAT_Qualcomm)
+                    exception_from_errno(errno(self->fd));
+#else
                     exception_from_errno(errno);
+#endif
                 }
             }
             break;
@@ -548,7 +631,7 @@ void _socket_settimeout(socket_obj_t *sock, uint64_t timeout_ms) {
     // if timeout_ms == UINT64_MAX, wait forever.
     sock->retries = (timeout_ms == UINT64_MAX) ? UINT_MAX : timeout_ms * 1000 / SOCKET_POLL_US;
 
-    usocket_timeout = timeout_ms/1000;
+    sock->timeout = timeout_ms/1000;
 
     struct timeval timeout = {
         .tv_sec = 0,
@@ -605,17 +688,50 @@ STATIC mp_uint_t _socket_read_data(mp_obj_t self_in, void *buf, size_t size,
         return MP_STREAM_ERROR;
     }
 
+    unsigned int retries = 0;
+    if (sock->timeout > 5)
+    {
+        retries = ((sock->timeout/5) - 1);
+    }
+    else
+    {
+        retries = sock->retries;
+    }
     // XXX Would be nicer to use RTC to handle timeouts
-    for (unsigned int i = 0; i <= sock->retries; ++i) {
+    for (unsigned int i = 0; i <= retries; ++i) {
+        if (sock->timeout > 5)
+        {
+            unsigned int retries_i = 0;
+            retries_i = sock->timeout/5;
+            if (!((retries_i - 1) == retries))
+            {
+                retries = retries_i;
+            }
+        }
+        else
+        {
+            retries = sock->retries;
+        }
         // Poll the socket to see if it has waiting data and only release the GIL if it doesn't.
         // This ensures higher performance in the case of many small reads, eg for readline.
         bool release_gil;
         {
             fd_set rfds;
+            int r = 0;
             FD_ZERO(&rfds);
             FD_SET(sock->fd, &rfds);
-            struct timeval timeout = { .tv_sec = 0, .tv_usec = 0 };
-            int r = lwip_select(sock->fd + 1, &rfds, NULL, NULL, &timeout);
+            MP_THREAD_GIL_EXIT();
+            if (sock->timeout > 5)
+            {
+                struct timeval timeout = { .tv_sec = 5, .tv_usec = 0 };
+                r = lwip_select(sock->fd + 1, &rfds, NULL, NULL, &timeout);
+            }
+            else
+            {
+                struct timeval timeout = { .tv_sec = 0, .tv_usec = 0 };
+                r = lwip_select(sock->fd + 1, &rfds, NULL, NULL, &timeout);
+            }
+            MP_THREAD_GIL_ENTER();
             release_gil = r != 1;
         }
         if (release_gil) {
@@ -625,9 +741,16 @@ STATIC mp_uint_t _socket_read_data(mp_obj_t self_in, void *buf, size_t size,
         if (release_gil) {
             MP_THREAD_GIL_ENTER();
         }
+#if defined(PLAT_Qualcomm)
+        int socket_error = errno(sock->fd);
+#endif
         if (r == 0) {
             sock->peer_closed = true;
+#if defined(PLAT_Qualcomm)
+            if (socket_error == ENOTCONN)//recv FIN
+#else
             if (errno == ENOTCONN)//recv FIN
+#endif
             {
                 *errcode = ENOTCONN;
                 QPY_SOCKET_LOG("_socket_read_data recv FIN \n");
@@ -637,14 +760,21 @@ STATIC mp_uint_t _socket_read_data(mp_obj_t self_in, void *buf, size_t size,
         if (r >= 0) {
             return r;
         }
+#if defined(PLAT_Qualcomm)
+        if (socket_error != 6) {
+            *errcode = socket_error;
+            return MP_STREAM_ERROR;
+        }
+#else
         if (errno != EWOULDBLOCK) {
             *errcode = errno;
             return MP_STREAM_ERROR;
         }
         check_for_exceptions();
+#endif
     }
 
-    *errcode = sock->retries == 0 ? MP_EWOULDBLOCK : MP_ETIMEDOUT;
+    *errcode = retries == 0 ? MP_EWOULDBLOCK : MP_ETIMEDOUT;
     return MP_STREAM_ERROR;
 }
 
@@ -690,9 +820,17 @@ int _socket_send(socket_obj_t *sock, const char *data, size_t datalen) {
         MP_THREAD_GIL_EXIT();
         int r = lwip_write(sock->fd, data + sentlen, datalen - sentlen);
         MP_THREAD_GIL_ENTER();
+#if defined(PLAT_Qualcomm)
+        int socket_error = errno(sock->fd);
+        if (r < 0 && socket_error != 11) {
+            exception_from_errno(socket_error);
+        }
+#else
         if (r < 0 && errno != EWOULDBLOCK) {
             exception_from_errno(errno);
         }
+#endif
+
         if (r > 0) {
             sentlen += r;
         }
@@ -736,7 +874,9 @@ STATIC mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t data_in, mp_obj_t addr_
 
     // create the destination address
     struct sockaddr_in to;
+#if !defined(PLAT_Qualcomm)
     to.sin_len = sizeof(to);
+#endif
     to.sin_family = AF_INET;
     to.sin_port = lwip_htons(netutils_parse_inet_addr(addr_in, (uint8_t *)&to.sin_addr, NETUTILS_BIG));
 
@@ -748,9 +888,16 @@ STATIC mp_obj_t socket_sendto(mp_obj_t self_in, mp_obj_t data_in, mp_obj_t addr_
         if (ret > 0) {
             return mp_obj_new_int_from_uint(ret);
         }
+#if defined(PLAT_Qualcomm)
+        int socket_error = errno(self->fd);
+        if (ret == -1 && socket_error != 11) {
+            exception_from_errno(socket_error);
+        }
+#else
         if (ret == -1 && errno != EWOULDBLOCK) {
             exception_from_errno(errno);
         }
+#endif
         check_for_exceptions();
     }
     mp_raise_OSError(MP_ETIMEDOUT);
@@ -794,10 +941,18 @@ STATIC mp_uint_t socket_stream_write(mp_obj_t self_in, const void *buf, mp_uint_
         if (r > 0) {
             return r;
         }
+#if defined(PLAT_Qualcomm)
+        int socket_error = errno(sock->fd);
+        if (r < 0 && socket_error != 11) {
+            *errcode = socket_error;
+            return MP_STREAM_ERROR;
+        }
+#else
         if (r < 0 && errno != EWOULDBLOCK) {
             *errcode = errno;
             return MP_STREAM_ERROR;
         }
+#endif
         check_for_exceptions();
     }
     *errcode = sock->retries == 0 ? MP_EWOULDBLOCK : MP_ETIMEDOUT;
@@ -852,7 +1007,11 @@ STATIC mp_uint_t socket_stream_ioctl(mp_obj_t self_in, mp_uint_t request, uintpt
             #endif
             int ret = lwip_close(socket->fd);
             if (ret != 0) {
+#if defined(PLAT_Qualcomm)
+                *errcode = errno(socket->fd);
+#else
                 *errcode = errno;
+#endif
                 return MP_STREAM_ERROR;
             }
             socket->fd = -1;
@@ -969,14 +1128,19 @@ STATIC mp_obj_t socket_getaddrinfo(size_t n_args, const mp_obj_t *args) {
             ip_addr_t ip4_addr = { .addr = addr->sin_addr.s_addr };
         #endif
             char buf[16];
+#if defined (PLAT_Qualcomm)
+            //struct ipv4_info ip4_addr = { .addr = addr->sin_addr.s_addr };
+            inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf));
+#else
             ipaddr_ntoa_r(&ip4_addr, buf, sizeof(buf));
+#endif
             mp_obj_t inaddr_objs[2] = {
                 mp_obj_new_str(buf, strlen(buf)),
                 mp_obj_new_int(ntohs(addr->sin_port))
             };
             addrinfo_objs[4] = mp_obj_new_tuple(2, inaddr_objs);
         }
-
+#if !defined (PLAT_Qualcomm)
         if (resi->ai_family == AF_INET6) {
             char ip6_addr_buf[128] = {0};
             struct sockaddr_in6 *addr = (struct sockaddr_in6 *)resi->ai_addr;
@@ -987,6 +1151,7 @@ STATIC mp_obj_t socket_getaddrinfo(size_t n_args, const mp_obj_t *args) {
             };
             addrinfo_objs[4] = mp_obj_new_tuple(2, inaddr_objs);
         }
+#endif
         mp_obj_list_append(ret_list, mp_obj_new_tuple(5, addrinfo_objs));
     }
 

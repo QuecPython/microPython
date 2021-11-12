@@ -16,12 +16,16 @@
 # -*- coding:utf-8 -*-
 
 import uos
+import ujson
+
 
 class FileNotFoundError(Exception):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
+
 
 def path_exists(path):
     if not path:
@@ -35,10 +39,11 @@ def path_exists(path):
         except Exception as e:
             return False
 
+
 def file_copy(dstFile, srcFile):
     if not path_exists(srcFile):
         return False
-        
+
     dstFp = open(dstFile, 'wb+')
     srcFp = open(srcFile, 'rb')
     srcFr = srcFp.read(4096)
@@ -49,16 +54,17 @@ def file_copy(dstFile, srcFile):
     srcFp.close()
     return True
 
+
 def path_dirname(path):
     if not path:
         return ''
-    
+
     pos = path.rfind('/')
     if pos < 0:
         return ''
     if pos == 0:
         return '/'
-    
+
     dirname = ''
     for i in range(0, len(path)):
         if i == pos:
@@ -66,11 +72,13 @@ def path_dirname(path):
         dirname = dirname + path[i]
     return dirname
 
+
 def path_getsize(path):
     if path_exists(path):
         return uos.stat(path)[-4]
     else:
         raise FileNotFoundError("can not find: '%s'" % path)
+
 
 def mkdirs(dir):
     dir_level_list = dir.split('/')
@@ -82,6 +90,7 @@ def mkdirs(dir):
             break
         dir_step_up = dir_step_up + '/' + dir_level_list[index[0] + 1]
 
+
 def rmdirs(dir):
     ls = uos.listdir(dir)
     if not ls:
@@ -92,4 +101,30 @@ def rmdirs(dir):
             rmdirs(item)
         rmdirs(dir)
 
+
+def touch(file, data, i=1, file_type="json"):
+    i = file.find("/", i)
+    if i != -1:
+        if not path_exists(file[:i]):
+            uos.mkdir(file[:i])
+        return touch(file, data, i=i + 1, file_type=file_type)
+    else:
+        try:
+            with open(file, "w") as f:
+                if file_type == "json":
+                    f.write(ujson.dumps(data))
+                else:
+                    f.write(data)
+        except Exception as e:
+            return -1
+        else:
+            return 0
+
+
+def read_json(file):
+    if path_exists(file):
+        with open(file, "r") as f:
+            return ujson.load(f)
+    else:
+        return None
 

@@ -57,6 +57,9 @@
 #include "mbedtls/sha1.h"
 #endif
 
+#include "modhash.h"
+#include "modaes.h"
+
 #endif
 
 typedef struct _mp_obj_hash_t {
@@ -238,6 +241,144 @@ STATIC const mp_obj_type_t uhashlib_sha1_type = {
     .make_new = uhashlib_sha1_make_new,
     .locals_dict = (void *)&uhashlib_sha1_locals_dict,
 };
+
+int str2dec(const uint8_t *src, int srclen, uint8_t *dst)
+{
+	int i = 0, j = 0;
+	int dstlen = 0;
+	uint8_t temp[250] = {0};
+	uint8_t dec_buf[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+	uint8_t ascii_buf[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+	// unsigned char temp[150] = {0};
+	// unsigned char dec_buf[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+	// unsigned char ascii_buf[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
+	for (i=0; i<srclen; i++)
+	{
+		for (j=0; j<16; j++)
+		{
+			if (src[i] == ascii_buf[j])
+			{
+				temp[i] = dec_buf[j];
+			}
+		}
+	}
+
+	if (srclen % 2 == 0)
+	{
+		dstlen =  srclen / 2;
+		for (i=0; i<dstlen; i++)
+		{
+			dst[i] = temp[i*2] * 16 + temp[i*2+1];
+		}
+		return dstlen;
+	}
+	else
+	{
+		dstlen = srclen / 2 + 1;
+		for (i=0; i<dstlen-1; i++)
+		{
+			dst[i] = temp[i*2] * 16 + temp[i*2+1];
+		}
+		dst[i] = temp[i*2];
+		return dstlen;
+	}
+}
+
+//int dec2str(const unsigned char *src, int srclen, unsigned char *dst)
+int dec2str(const uint8_t *src, int srclen, uint8_t *dst)
+{
+	int i = 0;
+	uint8_t h = 0;
+	uint8_t l = 0;
+	uint8_t ascii_buf[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+	// unsigned char h = 0;
+	// unsigned char l = 0;
+	// unsigned char ascii_buf[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
+	for (i=0; i<srclen; i++)
+	{
+		h = (src[i] >> 4) & 0x0f;
+		l = src[i] & 0x0f;
+		dst[2*i] = ascii_buf[h];
+		dst[2*i+1] = ascii_buf[l];
+	}
+	dst[2*i] = '\0';
+	return (2*i);
+}
+
+
+STATIC mp_obj_t mp_hash_sha1(mp_obj_t arg)
+{
+	char out_buff[20] = {0};
+	char str_buff[25] = {0};
+	char return_buff[45] = {0};
+	
+	mp_buffer_info_t argbuff;
+    mp_get_buffer_raise(arg, &argbuff, MP_BUFFER_READ);
+
+	str2dec((uint8_t *)argbuff.buf, argbuff.len, (uint8_t *)out_buff);
+	
+	SHA1(str_buff, out_buff, 20);
+	dec2str( (uint8_t *)str_buff, 20,  (uint8_t *)return_buff);
+	
+	return mp_obj_new_str(return_buff, strlen(return_buff));
+	
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_hash_sha1_obj, mp_hash_sha1);
+
+STATIC mp_obj_t mp_hash_aes_ecb(mp_obj_t aes_key, mp_obj_t aes_data)
+{
+	int dlen;
+	char out[100] = {0};
+	char return_buff[200] = {0};
+	
+	mp_aes_context ctx;
+	
+	mp_buffer_info_t key_buff;
+    mp_get_buffer_raise(aes_key, &key_buff, MP_BUFFER_READ);
+	
+	mp_buffer_info_t data_buff;
+    mp_get_buffer_raise(aes_data, &data_buff, MP_BUFFER_READ);
+	
+	aes_setkey_enc(&ctx, (unsigned char*)key_buff.buf, 128);
+	
+    aes_crypt_ecb(&ctx, AES_ENCRYPT, (unsigned char*)data_buff.buf, (unsigned char *)out, data_buff.len, &dlen);
+	
+	dec2str((uint8_t *)out, 96, (uint8_t *)return_buff);
+
+	
+	return mp_obj_new_str(return_buff, strlen(return_buff));
+	
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_hash_aes_ecb_obj, mp_hash_aes_ecb);
+
+
+STATIC mp_obj_t mp_hash_b64(mp_obj_t b64_data)
+{
+	int buflen;
+
+	char out_buff[100] = {0};
+	char return_buff[130] = {0};
+	
+	mp_buffer_info_t b64_buff;
+    mp_get_buffer_raise(b64_data, &b64_buff, MP_BUFFER_READ);
+
+	//mp_printf(&mp_plat_print, "[b64]buf =[%s]\n", (char *)b64_buff.buf);
+	buflen = str2dec((uint8_t *)b64_buff.buf, b64_buff.len, (uint8_t *)out_buff);
+	//mp_printf(&mp_plat_print, "[b64]buflen=%d \n", buflen);
+	
+	mp_base64_encode((unsigned char *)out_buff, return_buff, buflen);
+	
+	 //mp_printf(&mp_plat_print, "[b64]len=%d \n", len);
+	 //mp_printf(&mp_plat_print, "[b64]str_len=%d \n", strlen(return_buff));
+	 //mp_printf(&mp_plat_print, "[b64]return_buff=%s \n", return_buff);
+
+	return mp_obj_new_str(return_buff, strlen(return_buff));
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_hash_b64_obj, mp_hash_b64); 
+
+
 #endif
 
 #if MICROPY_PY_UHASHLIB_MD5
@@ -334,6 +475,9 @@ STATIC const mp_rom_map_elem_t mp_module_uhashlib_globals_table[] = {
     #endif
     #if MICROPY_PY_UHASHLIB_SHA1
     { MP_ROM_QSTR(MP_QSTR_sha1), MP_ROM_PTR(&uhashlib_sha1_type) },
+    { MP_ROM_QSTR(MP_QSTR_hash_sha1), MP_ROM_PTR(&mp_hash_sha1_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_aes_ecb), MP_ROM_PTR(&mp_hash_aes_ecb_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_hash_base64), MP_ROM_PTR(&mp_hash_b64_obj) },
     #endif
     #if MICROPY_PY_UHASHLIB_MD5
     { MP_ROM_QSTR(MP_QSTR_md5), MP_ROM_PTR(&uhashlib_md5_type) },

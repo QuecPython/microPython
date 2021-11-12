@@ -94,6 +94,26 @@ STATIC mp_obj_t queclib_dev_imei()
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(queclib_dev_imei_obj, queclib_dev_imei);
 
+#if defined (PLAT_Qualcomm)
+STATIC mp_obj_t queclib_dev_backup()
+{
+	int ret = Helios_Dev_Backup();
+	if( ret != 0 ) return mp_obj_new_int(-1);
+	return mp_obj_new_int(0);
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(queclib_dev_backup_obj, queclib_dev_backup);
+
+STATIC mp_obj_t set_usbmode(mp_obj_t usbmode) {
+    int mode = mp_obj_get_int(usbmode);
+	extern int Helios_Dev_SetUSBMode(int mode);
+    return mp_obj_new_int(Helios_Dev_SetUSBMode(mode));
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(set_usbmode_obj, set_usbmode);
+
+#endif
+
 
 STATIC const mp_rom_map_elem_t mp_module_modem_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_modem) },
@@ -102,6 +122,10 @@ STATIC const mp_rom_map_elem_t mp_module_modem_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_getDevModel), MP_ROM_PTR(&queclib_dev_model_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_getDevFwVersion), MP_ROM_PTR(&queclib_dev_fw_version_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_getDevProductId), MP_ROM_PTR(&queclib_dev_product_id_obj) },
+#if defined (PLAT_Qualcomm)
+	{ MP_ROM_QSTR(MP_QSTR_backup), MP_ROM_PTR(&queclib_dev_backup_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setUSBMode), MP_ROM_PTR(&set_usbmode_obj) },
+#endif
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_modem_globals, mp_module_modem_globals_table);
 

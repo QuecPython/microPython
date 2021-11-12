@@ -58,6 +58,7 @@ typedef struct _preview_obj_t {
 } preview_obj_t;
 
 static Helios_CAMConfig camconfig = {0};
+static preview_obj_t *preview_obj = NULL;
 
 
 STATIC mp_obj_t preview_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) 
@@ -100,8 +101,13 @@ STATIC mp_obj_t preview_make_new(const mp_obj_type_t *type, size_t n_args, size_
     }
 
 	printf("data camwidth etc = %d,%d,%d,%d,%d\n",camwidth,camheight,lcdprewidth,lcdpreheight,prebufcnt);
+
+	if(preview_obj == NULL)
+	{
+		preview_obj	= m_new_obj_with_finaliser(preview_obj_t);
+	}
 	
-    preview_obj_t *self = m_new_obj(preview_obj_t);
+    preview_obj_t *self = preview_obj;
 	self->base.type = &camera_preview_type;
 	self->cam_h = camheight;
 	self->cam_w = camwidth;
@@ -144,10 +150,20 @@ STATIC mp_obj_t camera_close(mp_obj_t self_in)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_preview_close_obj, camera_close);
 
+STATIC mp_obj_t camera_preview_deinit(mp_obj_t self_in)
+{
+	preview_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	int ret = -1;
+	preview_obj = NULL;
+	ret = Helios_camera_close();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_preview__del__obj, camera_preview_deinit);
 
 
 
 STATIC const mp_rom_map_elem_t Preview_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR___del__), 	MP_ROM_PTR(&camera_preview__del__obj) },
     { MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&camera_preview_open_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&camera_preview_close_obj) },
 

@@ -35,5 +35,10 @@ void mp_thread_deinit(void);
 unsigned int mp_get_available_memory_size(void);
 bool mp_is_python_thread(void);
 
+void mp_thread_mutex_init(mp_thread_mutex_t *mutex);
+int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait);
+void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex);
+void mp_thread_mutex_del(mp_thread_mutex_t *mutex);
+
 #endif // MICROPY_INCLUDED_MPTHREADPORT_H
 

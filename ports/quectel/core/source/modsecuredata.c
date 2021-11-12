@@ -104,12 +104,13 @@ STATIC mp_obj_t qpy_securedata_store(size_t n_args, const mp_obj_t *pos_args, mp
     Helios_SecureData_t sec_data = {0};
     sec_data.index = index;
     sec_data.len = length;
-    sec_data.pBuffer = (uint8_t *)malloc(sizeof(uint8_t)*length);
+    sec_data.pBuffer = (uint8_t *)malloc(sizeof(uint8_t)*length + 1);
     if (sec_data.pBuffer == NULL)
     {
         m_malloc_fail(length);
     }
-    strncpy((char *)sec_data.pBuffer, (char *)bufinfo.buf, strlen((char *)bufinfo.buf));
+    memcpy((char *)sec_data.pBuffer, (char *)bufinfo.buf, length);
+    sec_data.pBuffer[length] = 0;
     
     int ret = Helios_Securedata_Store(&sec_data);
     if (sec_data.pBuffer)

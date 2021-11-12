@@ -74,6 +74,9 @@ void mp_sched_lock(void);
 void mp_sched_unlock(void);
 #define mp_sched_num_pending() (MP_STATE_VM(sched_len))
 bool mp_sched_schedule(mp_obj_t function, mp_obj_t arg);
+bool mp_sched_schedule_ex(c_callback_t *callback, mp_obj_t arg);
+bool mp_sched_schedule_callback_register(c_callback_t *callback, mp_obj_t func_obj);
+
 #endif
 
 // extra printing method specifically for mp_obj_t's which are integral type

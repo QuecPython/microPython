@@ -22,14 +22,17 @@ import file_crc32
 import ql_fs
 
 backup_root_dir = '/bak'
-backup_restore_flag_file  = '/bak/backup_restore.json'
+backup_restore_flag_file = '/bak/backup_restore.json'
 backup_restore_flag_file_max_size = 64
+
 
 class _checkError(Exception):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
+
 
 def _check():
     if not ql_fs.path_exists(backup_restore_flag_file):
@@ -43,10 +46,45 @@ def _check():
             raise _checkError('%s is empty' % backup_restore_flag_file)
         return fr
 
+
 def _get_backup_restore_flag():
     json_str = _check()
     backup_restore_flag = ujson.loads(json_str)
     return backup_restore_flag['enable']
+
+
+def bak_update(file, data):
+    _backup_root_dir = '/_bak'
+    if not isinstance(data, dict) or ql_fs.path_exists(file):
+        return -1
+    try:
+        backup_restore_flag = _get_backup_restore_flag()
+    except Exception as e:
+        return -2
+    if backup_restore_flag:
+        _fs = uos.VfsLfs1(32, 32, 32, "customer_backup_fs")
+        uos.mount(_fs, _backup_root_dir)
+        res = 0
+        try:
+            back_file = _backup_root_dir + file
+            res = ql_fs.touch(back_file, data)
+            if not ql_fs.path_exists(file):
+                res = ql_fs.touch(file, dict())
+            ql_fs.file_copy(file, back_file)
+            code = checksum.bak_update(file_name=back_file)
+            if code is not None:
+                checksum.usr_update(file_name=file)
+            else:
+                raise Exception("checksum failed")
+        except Exception as e:
+            print(e)
+            uos.remove(file)
+            res = -5
+        uos.umount(_backup_root_dir)
+        return res
+    else:
+        return -3
+
 
 def main():
     try:
@@ -57,7 +95,8 @@ def main():
             csum = ujson.loads(json_str)
             for item in csum:
                 crc32_value = file_crc32.calc(item['name'])
-                if crc32_value == None or (int(crc32_value, 16) != int(item['crc32'], 16)): # crc32 mismatched, should restore backup file
+                if crc32_value == None or (
+                        int(crc32_value, 16) != int(item['crc32'], 16)):  # crc32 mismatched, should restore backup file
                     print('- restoring', item['name'])
                     backup_file_name = backup_root_dir + '/' + item['name']
                     if not ql_fs.path_exists(backup_file_name):

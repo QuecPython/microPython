@@ -1,11 +1,11 @@
 # Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
-#  
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#  
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-#  
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,7 +15,7 @@
 import usocket
 import ujson
 import ussl
-
+import utime
 
 class Response:
     def __init__(self, f, decode=True, sizeof=4096):
@@ -81,8 +81,8 @@ class Response:
                 "The data for the response cannot be converted to JSON-type data,please try use response.content method")
 
 
-def request(method, url, data=None, json=None, stream=None, decode=True, sizeof=255, timeout=None, headers={},
-            ssl_params={}):
+def request(method, url, data=None, json=None, files=None, stream=None, decode=True, sizeof=255, timeout=None, headers=None,
+            ssl_params=None):
     global port
     global s_isopen
     s_isopen = True
@@ -122,7 +122,6 @@ def request(method, url, data=None, json=None, stream=None, decode=True, sizeof=
     elif url.split(".")[0].isdigit() and ":" not in url:
         raise ValueError(
             "MissingSchema: Invalid URL '{}': No schema supplied. Perhaps you meant http://{}? ".format(url, url))
-
     else:
         path = ""
         proto = ""
@@ -154,19 +153,32 @@ def request(method, url, data=None, json=None, stream=None, decode=True, sizeof=
             raise RuntimeError(
                 "HTTPConnectionPool(host='{}', port=8080): Max retries exceeded with url: / (Caused by NewConnectionError Failed to establish a new connection: [WinError 10060] 由于连接方在一段时间后没有正确答复或连接的主机没有反应，连接尝试失败。'))".format(
                     URL))
-
         if proto == "https:":
             try:
-                if len(ssl_params):
+                if ssl_params:
                     s = ussl.wrap_socket(s, **ssl_params)
                 else:
                     s = ussl.wrap_socket(s, server_hostname=host)
             except Exception as e:
                 pass
-
         s.write(b"%s /%s HTTP/1.0\r\n" % (method, path))
-        if not "Host" in headers:
-            s.write(b"Host: %s\r\n" % host)
+        s.write(b"Host: %s\r\n" % host)
+        if headers:
+            if files:
+                boundary = str(utime.time())
+                if not (files.get("filepath") and files.get("filepath")):
+                    raise ValueError("Missing key parameters 'filepath' and 'filename'")
+                if headers.get('Content-Type') == "multipart/form-data":
+                    headers['Content-Type'] = headers['Content-Type'] + '; boundary={}'.format(boundary)
+                    headers['charset'] = 'UTF-8'
+        else:
+            headers = dict()
+            if files:
+                boundary = str(utime.time())
+                headers['Content-Type'] = "multipart/form-data; boundary={}".format(boundary)
+                headers['charset'] = 'UTF-8'
+            if json:
+                headers['Content-Type'] = "application/json"
         for k in headers:
             s.write(k)
             s.write(b": ")
@@ -175,12 +187,24 @@ def request(method, url, data=None, json=None, stream=None, decode=True, sizeof=
         if json is not None:
             assert data is None
             data = ujson.dumps(json)
-            s.write(b"Content-Type: application/json\r\n")
         if data:
             s.write(b"Content-Length: %d\r\n" % len(data))
-        s.write(b"\r\n")
-        if data:
+            s.write(b"\r\n")
             s.write(data)
+        if files:
+            with open('{}'.format(files.get("filepath")), 'r') as f:
+                content = f.read()
+                if files.get("name") is not None:
+                    datas = '--{0}{1}Content-Disposition: form-data; {2}{1}{1}{3}{1}--{0}--{1}'. \
+                        format(boundary, '\r\n', files.get("name"), content)
+                else:
+                    datas = '--{0}{1}Content-Disposition: form-data; name="file"; filename="{2}"{1}Content-Type: application/octet-stream{1}{1}{3}{1}--{0}--{1}'. \
+                        format(boundary, '\r\n', files.get("filename"), content)
+                s.write(b"Content-Length: %d\r\n" % len(datas))
+                s.write(b"\r\n")
+                s.write(datas)
+        if not (files and data):
+            s.write(b"\r\n")
         l = s.readline()
         global uheaders
         uheaders = {}
@@ -202,16 +226,11 @@ def request(method, url, data=None, json=None, stream=None, decode=True, sizeof=
                 pass
             if not l or l == b"\r\n":
                 break
-            # 2021-01-23 jian.yao
-            # if l.startswith(b"Transfer-Encoding:"):
-            #     if b"chunked" in l:
-            #         raise ValueError("Unsupported " + l.decode())
             if l.startswith(b"Location:") and not 200 <= status <= 299:
                 raise NotImplementedError("Redirects not yet supported")
     except OSError:
         s.close()
         raise
-
     resp = Response(s, decode=decode, sizeof=sizeof)
     resp.status_code = status
     resp.reason = reason
