@@ -108,6 +108,22 @@ STATIC const mp_obj_type_t mp_type_bound_meth = {
     #endif
 };
 
+mp_obj_t mp_obj_bound_get_self(void *bound)
+{
+    if(NULL == bound)
+        return NULL;
+
+    return ((mp_obj_bound_meth_t *)bound)->self;
+}
+
+mp_obj_t mp_obj_bound_get_meth(void *bound)
+{
+    if(NULL == bound)
+        return NULL;
+
+    return ((mp_obj_bound_meth_t *)bound)->meth;
+}
+
 mp_obj_t mp_obj_new_bound_meth(mp_obj_t meth, mp_obj_t self) {
     mp_obj_bound_meth_t *o = m_new_obj(mp_obj_bound_meth_t);
     o->base.type = &mp_type_bound_meth;

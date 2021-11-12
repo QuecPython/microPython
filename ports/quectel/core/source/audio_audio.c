@@ -18,6 +18,7 @@
 #include "audio_queue.h"
 #include "helios_audio.h"
 #include "helios_debug.h"
+#include "helios_gpio.h"
 
 typedef struct _audio_obj_t {
     mp_obj_base_t base;
@@ -29,9 +30,88 @@ typedef struct _audio_obj_t {
 
 extern const mp_obj_type_t audio_audio_type;
 
-static mp_obj_t g_audio_callback;
+static c_callback_t *g_audio_callback;
+static c_callback_t *g_audio_speakerpa_callback;
+static int g_gpio_pa = -1;
+
+STATIC void delay_us(unsigned int us)
+{
+	int cnt = 26;
+	volatile int i = 0;
+	while(us--){
+		i = cnt;
+		while(i--);
+	}
+}
+
+STATIC void set_clk_high(void)
+{
+	Helios_GPIO_SetLevel(g_gpio_pa, HELIOS_LVL_HIGH);
+}
+
+STATIC void set_clk_low(void)
+{
+	Helios_GPIO_SetLevel(g_gpio_pa, HELIOS_LVL_LOW);
+}
+
+STATIC void audio_open_power_amplifier(void)
+{
+	// 拉高 -> 低 -> 高
+	set_clk_high();
+	delay_us(3);
+	set_clk_low();
+	delay_us(3);
+	set_clk_high();
+}
+
+static void user_audio_speakerpa_callback(unsigned int event)
+{
+	if(g_gpio_pa != -1)
+	{
+		if (event == 1)
+		{
+			//打开PA
+			audio_open_power_amplifier();
+			HELIOS_AUDIO_LOG("audio set high, event 1.\r\n");
+	    } else {
+	       //关闭PA
+	 	    set_clk_low();
+			HELIOS_AUDIO_LOG("audio set low, event 0.\r\n");
+		}
+	}
+	if (g_audio_speakerpa_callback)
+	{
+		mp_sched_schedule_ex(g_audio_speakerpa_callback, mp_obj_new_int(event));
+	}
+}
+
+#if defined (PLAT_ASR) || defined(PLAT_Unisoc)
+STATIC mp_obj_t helios_set_pa(mp_obj_t self_in, mp_obj_t gpio)
+{
+	int ret = 0;
+	int gpio_num = mp_obj_get_int(gpio);
+	g_gpio_pa = gpio_num;
+
+	ret = Helios_Audio_SetPa(gpio_num);
+	if (ret != 0)
+	{
+		return mp_obj_new_int(0);
+	}
+	return mp_obj_new_int(1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(helios_set_pa_obj, helios_set_pa);
 
 
+STATIC mp_obj_t helios_set_speakerpa_callback(mp_obj_t self_in, mp_obj_t callback)
+{
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_audio_speakerpa_callback = &cb;
+	mp_sched_schedule_callback_register(g_audio_speakerpa_callback, callback);
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(helios_set_speakerpa_callback_obj, helios_set_speakerpa_callback);
+#endif
 
 /*=============================================================================*/
 /* FUNCTION: helios_set_audio_callback                                             */
@@ -44,7 +124,11 @@ static mp_obj_t g_audio_callback;
 /*=============================================================================*/
 STATIC mp_obj_t helios_set_audio_callback(mp_obj_t self_in, mp_obj_t callback)
 {
-	g_audio_callback = callback;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_audio_callback = &cb;
+	mp_sched_schedule_callback_register(g_audio_callback, callback);
+
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(helios_set_audio_callback_obj, helios_set_audio_callback);
@@ -83,7 +167,7 @@ int audio_play_callback(char *ptr, size_t lens, Helios_EnumAudPlayerState state)
 	if ((g_audio_callback != NULL) && (audio_state != AUDIO_IDLE))
 	{
 		HELIOS_AUDIO_LOG("[Audio] callback start.\r\n");
-		mp_sched_schedule(g_audio_callback, mp_obj_new_int(audio_event));
+		mp_sched_schedule_ex(g_audio_callback, mp_obj_new_int(audio_event));
 		HELIOS_AUDIO_LOG("[Audio] callback end.\r\n");
 	}
 
@@ -131,12 +215,15 @@ STATIC mp_obj_t audio_make_new(const mp_obj_type_t *type, size_t n_args, size_t 
 		mp_raise_ValueError("invalid device index, the value of device should be in[0,2]");
 	}
 	
-    audio_obj_t *self = m_new_obj(audio_obj_t);
+    audio_obj_t *self = m_new_obj_with_finaliser(audio_obj_t);
     self->base.type = &audio_audio_type;
 	self->device = device;
 	//self->inited = 0;
 
 	Helios_Audio_Init();
+	#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+	Helios_Audio_SetPaCallback((Helios_AudOutputType)device, user_audio_speakerpa_callback);
+	#endif
 
 	if(device == HELIOS_OUTPUT_RECEIVER||device == HELIOS_OUTPUT_SPEAKER||device == HELIOS_OUTPUT_HEADPHONE){
 		Helios_Audio_SetAudioChannle(device);
@@ -514,7 +601,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(helios_get_audio_state_obj, helios_get_audio_st
 STATIC mp_obj_t helios_set_volume(mp_obj_t self_in, mp_obj_t volume)
 {
 	int vol = mp_obj_get_int(volume);
-	if (vol < 1 || vol > 11)
+	if (vol < 0 || vol > 11)
 	{
 		mp_raise_ValueError("invalid value,TTS volume should be array between [0,11]");
 		return mp_obj_new_int(-1);
@@ -607,7 +694,32 @@ STATIC mp_obj_t helios_play_stream_seek(size_t n_args, const mp_obj_t *args, mp_
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(helios_play_stream_seek_obj, 1, helios_play_stream_seek);
 #endif
 
+
+STATIC mp_obj_t helios_audio___del__(mp_obj_t self_in)
+{
+	uint8_t i = 0;
+	Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
+	for (i=0; i<QUEUE_NUMS; i++)
+	{
+		audio_queue_init(&audio.audio_queue[i]);
+	}
+	audio.cur_priority = 0;
+	audio.cur_breakin  = 0;
+	audio.total_nums = 0;
+	//audio.audio_state = AUDIO_IDLE;
+	audio.user_call_stop = 1;
+	Helios_Mutex_Unlock(audio.queue_mutex);
+    g_audio_callback = NULL;
+    g_audio_speakerpa_callback = NULL;
+
+	int ret = Helios_Audio_FilePlayStop();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(helios_audio___del___obj, helios_audio___del__);
+
+
 STATIC const mp_rom_map_elem_t audio_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&helios_audio___del___obj) },
     { MP_ROM_QSTR(MP_QSTR_play), MP_ROM_PTR(&helios_play_file_start_obj) },
     { MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&helios_play_file_stop_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_stopAll), MP_ROM_PTR(&helios_play_file_stop_all_obj) },
@@ -617,6 +729,10 @@ STATIC const mp_rom_map_elem_t audio_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_setCallback), MP_ROM_PTR(&helios_set_audio_callback_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_playStream), MP_ROM_PTR(&helios_play_stream_start_obj) },
     { MP_ROM_QSTR(MP_QSTR_stopPlayStream), MP_ROM_PTR(&helios_play_stream_stop_obj) },
+#if defined (PLAT_ASR) || defined (PLAT_Unisoc)
+	{ MP_ROM_QSTR(MP_QSTR_set_pa), MP_ROM_PTR(&helios_set_pa_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setSpeakerpaCallback), MP_ROM_PTR(&helios_set_speakerpa_callback_obj) },
+#endif
 #if defined (PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_StreamJump), MP_ROM_PTR(&helios_play_stream_jump_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_StreamPause), MP_ROM_PTR(&helios_play_stream_pause_obj) },

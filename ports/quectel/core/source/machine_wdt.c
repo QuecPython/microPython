@@ -37,12 +37,14 @@ typedef struct _machine_wdt_obj_t
 	int period;
 }machine_wdt_obj_t;
 
+STATIC machine_wdt_init_t machine_wdt_obj = {0};
+
 
 STATIC mp_obj_t machine_wdt_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) 
 {
 	mp_arg_check_num(n_args, n_kw, 0, 1, true);
-	
-	machine_wdt_init_t *self = m_new_obj(machine_wdt_init_t);
+
+	machine_wdt_init_t *self = &machine_wdt_obj;
 	machine_wdt_obj_t info = {0};
 	self->base.type = &machine_wdt_type;
 	if (n_args > 0)
@@ -51,7 +53,7 @@ STATIC mp_obj_t machine_wdt_make_new(const mp_obj_type_t *type, size_t n_args, s
 		--n_args;
 		++args;
 	}
-	
+	Helios_WDT_Deinit();
 	if(0 != Helios_WDT_Init((uint64_t) info.period)) {
 		return mp_const_false;
 	}

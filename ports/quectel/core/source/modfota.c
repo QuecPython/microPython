@@ -90,8 +90,9 @@ STATIC mp_obj_t fota_write(size_t n_args, const mp_obj_t *args)
 	
 	return mp_obj_new_int(0);
 }
+#if !defined(PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(fota_write_obj, 1, 3, fota_write);
-
+#endif
 
 
 STATIC mp_obj_t fota_flush(const mp_obj_t arg0)
@@ -109,8 +110,9 @@ STATIC mp_obj_t fota_flush(const mp_obj_t arg0)
 	
 	return mp_obj_new_int(0);
 }
+#if !defined(PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(fota_flush_obj, fota_flush);
-
+#endif
 STATIC mp_obj_t fota_verify(const mp_obj_t arg0)
 {
 	int ret = 0; 
@@ -126,9 +128,10 @@ STATIC mp_obj_t fota_verify(const mp_obj_t arg0)
 	
 	return mp_obj_new_int(0);
 }
+#if !defined(PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(fota_verify_obj, fota_verify);
-
-STATIC mp_obj_t fota_callback = NULL;
+#endif
+STATIC c_callback_t *fota_callback = NULL;
 
 
 static void mpFotaProgressCB(int sta, int progress)
@@ -139,7 +142,7 @@ static void mpFotaProgressCB(int sta, int progress)
 				mp_obj_new_int(progress),											
 			};	
 
-	    mp_sched_schedule(fota_callback, mp_obj_new_list(2, fota_list));
+	    mp_sched_schedule_ex(fota_callback, mp_obj_new_list(2, fota_list));
     }
 	
 	if(sta == 1)
@@ -192,7 +195,10 @@ STATIC mp_obj_t fota_firmware_download(size_t n_args, const mp_obj_t *args, mp_m
     }
 
     if (args_parse[ARG_callback].u_obj != mp_const_none) {
-        fota_callback = args_parse[ARG_callback].u_obj;
+        static c_callback_t cb = {0};
+        memset(&cb, 0, sizeof(c_callback_t));
+    	fota_callback = &cb;
+    	mp_sched_schedule_callback_register(fota_callback, args_parse[ARG_callback].u_obj);
     }
 
 	ret  = Helios_Fota_firmware_download(server_address1, server_address2, mpFotaProgressCB);
@@ -208,13 +214,26 @@ STATIC mp_obj_t fota_firmware_download(size_t n_args, const mp_obj_t *args, mp_m
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(fota_firmware_download_obj, 1, fota_firmware_download);
 
+STATIC mp_obj_t fota___del__(mp_obj_t self_in)
+{
+    fota_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+	Helios_Fota_Deinit(self->ctx);
+    fota_callback = NULL;
+
+    return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(fota___del___obj, fota___del__);
 
 
 STATIC const mp_rom_map_elem_t fota_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&fota___del___obj) },
 	{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_fota) },
+#if !defined(PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&fota_write_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_flush), MP_ROM_PTR(&fota_flush_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_verify), MP_ROM_PTR(&fota_verify_obj) },
+#endif
 	{ MP_ROM_QSTR(MP_QSTR_httpDownload), MP_ROM_PTR(&fota_firmware_download_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(fota_locals_dict, fota_locals_dict_table);

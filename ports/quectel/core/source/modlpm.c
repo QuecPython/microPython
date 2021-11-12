@@ -87,7 +87,10 @@ STATIC mp_obj_t Helios_lpm_wakelock_lock_mp(const mp_obj_t lpm_fd)
   
   return mp_obj_new_int(-1);
 }
+#if !defined(PLAT_RDA)
+
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(Helios_lpm_wakelock_lock_mp_obj, Helios_lpm_wakelock_lock_mp);
+#endif
 
 
 /*=============================================================================*/
@@ -115,8 +118,10 @@ STATIC mp_obj_t Helios_lpm_wakelock_unlock_mp(const mp_obj_t lpm_fd)
   
   return mp_obj_new_int(-1);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(Helios_lpm_wakelock_unlock_mp_obj, Helios_lpm_wakelock_unlock_mp);
+#if !defined(PLAT_RDA)
 
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(Helios_lpm_wakelock_unlock_mp_obj, Helios_lpm_wakelock_unlock_mp);
+#endif
 
 /*=============================================================================*/
 /* FUNCTION: Helios_lpm_wakelock_create_mp                                             */
@@ -156,8 +161,10 @@ STATIC mp_obj_t Helios_lpm_wakelock_create_mp(size_t n_args, const mp_obj_t *arg
   
   return mp_obj_new_int(wakelock_fd);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Helios_lpm_wakelock_create_mp_obj, 1, 2, Helios_lpm_wakelock_create_mp);
+#if !defined(PLAT_RDA)
 
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(Helios_lpm_wakelock_create_mp_obj, 1, 2, Helios_lpm_wakelock_create_mp);
+#endif
 
 /*=============================================================================*/
 /* FUNCTION: Helios_lpm_wakelock_delete_mp                                             */
@@ -178,8 +185,9 @@ STATIC mp_obj_t Helios_lpm_wakelock_delete_mp(const mp_obj_t lpm_fd)
   ret = Helios_LPM_WakeLockDeInit(g_lpm_fd);
   return mp_obj_new_int(ret);
 }
+#if !defined(PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(Helios_lpm_wakelock_delete_mp_obj, Helios_lpm_wakelock_delete_mp);
-
+#endif
 
 /*=============================================================================*/
 /* FUNCTION: Helios_lpm_get_wakelock_num_mp                                             */
@@ -200,7 +208,9 @@ STATIC mp_obj_t Helios_lpm_get_wakelock_num_mp()
   
   return mp_obj_new_int(num);
 }
+#if !defined(PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(Helios_lpm_get_wakelock_num_mp_obj, Helios_lpm_get_wakelock_num_mp);
+#endif
 
 
 /*
@@ -218,12 +228,14 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(mp_get_free_size_obj, mp_get_free_size);
 
 STATIC const mp_rom_map_elem_t pm_module_globals_table[] = {
   { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_pm) },
+#if !defined(PLAT_RDA)
   { MP_ROM_QSTR(MP_QSTR_create_wakelock), MP_ROM_PTR(&Helios_lpm_wakelock_create_mp_obj) },
   { MP_ROM_QSTR(MP_QSTR_delete_wakelock), MP_ROM_PTR(&Helios_lpm_wakelock_delete_mp_obj) },
   { MP_ROM_QSTR(MP_QSTR_wakelock_lock), MP_ROM_PTR(&Helios_lpm_wakelock_lock_mp_obj) },
   { MP_ROM_QSTR(MP_QSTR_wakelock_unlock), MP_ROM_PTR(&Helios_lpm_wakelock_unlock_mp_obj) },
-  { MP_ROM_QSTR(MP_QSTR_autosleep), MP_ROM_PTR(&Helios_sleep_enable_mp_obj) },
   { MP_ROM_QSTR(MP_QSTR_get_wakelock_num), MP_ROM_PTR(&Helios_lpm_get_wakelock_num_mp_obj) },
+#endif
+  { MP_ROM_QSTR(MP_QSTR_autosleep), MP_ROM_PTR(&Helios_sleep_enable_mp_obj) },
   // { MP_ROM_QSTR(MP_QSTR_getFreeSize), MP_ROM_PTR(&mp_get_free_size_obj) },
 };
 STATIC MP_DEFINE_CONST_DICT(pm_module_globals, pm_module_globals_table);

@@ -32048,17 +32048,34 @@ STATIC mp_obj_t mp_lv_draw_img(size_t mp_n_args, const mp_obj_t *mp_args)
 
 STATIC MP_DEFINE_CONST_LV_FUN_OBJ_VAR(mp_lv_draw_img_obj, 5, mp_lv_draw_img, lv_draw_img);
 
+#if 0
 
+STATIC const mp_lv_struct_t mp_lv_font_chinese_16 = {
+    { &mp_lv_font_t_type },
+    (lv_font_t*)&lv_font_chinese_16
+};
+
+#endif
+	
+STATIC const mp_lv_struct_t mp_quec_font = {
+	{ &mp_lv_font_t_type },
+	(lv_font_t*)&quec_font
+};
+
+
+#if 0
 STATIC const mp_lv_struct_t mp_lv_font_chinese_11 = {
     { &mp_lv_font_t_type },
     (lv_font_t*)&lv_font_chinese_11
 };
+#endif
 
 STATIC const mp_lv_struct_t mp_lv_font_chinese_9 = {
     { &mp_lv_font_t_type },
     (lv_font_t*)&lv_font_chinese_9
 };
 
+#if 0
 
 
 /*
@@ -32086,7 +32103,7 @@ STATIC const mp_lv_struct_t mp_lv_font_roboto_28 = {
     (lv_font_t*)&lv_font_roboto_28
 };
     
-
+#endif
 /*
  * lvgl lv_style_scr global definitions
  */
@@ -33122,11 +33139,13 @@ STATIC const mp_rom_map_elem_t lvgl_globals_table[] = {
     
     { MP_ROM_QSTR(MP_QSTR_color_t), MP_ROM_PTR(&mp_lv_color32_t_type) },
 
-	{ MP_ROM_QSTR(MP_QSTR_font_chinese_11), MP_ROM_PTR(&mp_lv_font_chinese_11) },
+	
+	//{ MP_ROM_QSTR(MP_QSTR_font_chinese_16), MP_ROM_PTR(&mp_lv_font_chinese_16) },
+	//{ MP_ROM_QSTR(MP_QSTR_font_chinese_11), MP_ROM_PTR(&mp_lv_font_chinese_11) },
 	{ MP_ROM_QSTR(MP_QSTR_font_chinese_9), MP_ROM_PTR(&mp_lv_font_chinese_9) },
-    { MP_ROM_QSTR(MP_QSTR_font_roboto_16), MP_ROM_PTR(&mp_lv_font_roboto_16) },
+    //{ MP_ROM_QSTR(MP_QSTR_font_roboto_16), MP_ROM_PTR(&mp_lv_font_roboto_16) },
     { MP_ROM_QSTR(MP_QSTR_font_quec), MP_ROM_PTR(&mp_quec_font) },
-    { MP_ROM_QSTR(MP_QSTR_font_roboto_28), MP_ROM_PTR(&mp_lv_font_roboto_28) },
+    //{ MP_ROM_QSTR(MP_QSTR_font_roboto_28), MP_ROM_PTR(&mp_lv_font_roboto_28) },
     { MP_ROM_QSTR(MP_QSTR_style_scr), MP_ROM_PTR(&mp_lv_style_scr) },
     { MP_ROM_QSTR(MP_QSTR_style_transp), MP_ROM_PTR(&mp_lv_style_transp) },
     { MP_ROM_QSTR(MP_QSTR_style_transp_fit), MP_ROM_PTR(&mp_lv_style_transp_fit) },

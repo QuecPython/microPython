@@ -48,7 +48,7 @@ static char *pcm_buffer = NULL;
 typedef struct _audio_record_obj_t {
     mp_obj_base_t base;
 	char file_name[128];
-	mp_obj_t callback;
+	c_callback_t *callback;
 	int  isbusy;
 	int record_timer;
 	int device;
@@ -58,8 +58,8 @@ typedef struct _audio_record_obj_t {
 audio_record_obj_t *self_cur = NULL;
 
 
-static mp_obj_t g_record_callback;
-static mp_obj_t callback_cur;
+static c_callback_t *g_record_callback;
+static c_callback_t *callback_cur;
 
 //extern int device;
 
@@ -115,13 +115,13 @@ static int helios_file_record_cb(char *p_data, int len, Helios_EnumAudRecordStat
 	if (g_record_callback)
 	{
 		audio_record_printf("[audio_record] callback start.\r\n");
-		//ret = mp_sched_schedule(g_record_callback, mp_obj_new_int(res));
+		//ret = mp_sched_schedule_ex(g_record_callback, mp_obj_new_int(res));
 		mp_obj_t audio_cb[3] = {
 			mp_obj_new_str(p_data,strlen(p_data)),
 			mp_obj_new_int(len),
 			mp_obj_new_int(res),
 		};
-		ret = mp_sched_schedule(g_record_callback, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));	
+		ret = mp_sched_schedule_ex(g_record_callback, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));	
 		audio_record_printf("[audio_record] callback end.\r\n");
 	}
 	else
@@ -224,15 +224,19 @@ static int helios_stream_record_cb(char *p_data, int len, Helios_EnumAudRecordSt
 			mp_obj_new_int(send_len),
 			mp_obj_new_int(res),
 		};
-		
-		if(mp_obj_is_callable(callback_cur)){
-			mp_sched_schedule(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));
-		}
+
+		mp_sched_schedule_ex(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));
 	}
 
 	return 0;
 }
 
+static void helios_record_stream_timer_cb(void *argv) {
+	audio_record_obj_t *self = (audio_record_obj_t *)argv;
+	Helios_Audio_StreamRecordStop();
+	self->isbusy = 0;
+	record_state = 0;
+}
 
 STATIC const mp_arg_t stream_allowed_args[] = {
     { MP_QSTR_format,    	MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = FORMAT_AMR} },
@@ -273,18 +277,22 @@ STATIC mp_obj_t helios_audio_record_stream_start(size_t n_args, const mp_obj_t *
 
 	callback_cur = self->callback;
 
-	if(format > HELIOS_AUDIO_FORMAT_MAX || time < 1 || !(samplerate == 8000 || samplerate == 16000)) {
+	if(format > HELIOS_AUDIO_FORMAT_MAX || !(samplerate == 8000 || samplerate == 16000)) {
 		mp_raise_ValueError("Parameter error\n");
 		return mp_obj_new_int(-1);
 	}
-	
-    Helios_OSTimerAttr OSTimerAttr = {
-        .ms = (uint32_t)time*1000,
-        .cycle_enable = 0,
-        .cb = helios_record_timer_cb,
-        .argv = (void *)self
-    };
-	ret = Helios_OSTimer_Start(self->rec_timer, &OSTimerAttr);
+
+	if(0 != time)
+	{
+	    Helios_OSTimerAttr OSTimerAttr = {
+	        .ms = (uint32_t)time*1000,
+	        .cycle_enable = 0,
+	        .cb = helios_record_stream_timer_cb,
+	        .argv = (void *)self
+	    };
+		ret = Helios_OSTimer_Start(self->rec_timer, &OSTimerAttr);
+	}
+
 	if(ret)
 	{
 		audio_record_printf("Timer starte failed\r\n");
@@ -376,6 +384,20 @@ STATIC mp_obj_t helios_audio_record_stream_read(mp_obj_t self_in,mp_obj_t read_b
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(mp_helios_record_stream_read_obj, helios_audio_record_stream_read);
 
+STATIC mp_obj_t helios_audio_record_stream_stop(mp_obj_t self_in)
+{
+    int ret = 0;
+	audio_record_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	ret = Helios_Audio_StreamRecordStop();
+	self->isbusy = 0;
+	record_state = 0;
+
+	if(self->rec_timer!= 0) 
+		ret = Helios_OSTimer_Stop(self->rec_timer);
+
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_helios_record_stream_stop_obj, helios_audio_record_stream_stop);
 
 STATIC mp_obj_t helios_audio_record_start(mp_obj_t self_in, mp_obj_t path, mp_obj_t time_out)
 {
@@ -505,6 +527,9 @@ STATIC mp_obj_t helios_audio_record_getFilePath(mp_obj_t self_in,mp_obj_t path)
 	char name[256] = {0};
 	char *file_name = (char*)mp_obj_str_get_str(path);
 
+	if(file_name == NULL||strlen(file_name) == 0)
+		return mp_obj_new_int(-2);
+
 	sprintf(name, "U:/%s",file_name);
 
 	audio_record_printf("name = %s\n",name);
@@ -613,6 +638,9 @@ STATIC mp_obj_t helios_audio_record_getSize(mp_obj_t self_in,mp_obj_t path)
 	char name[256] = {0};
 	char *file_name = (char*)mp_obj_str_get_str(path);
 
+	if(file_name == NULL||strlen(file_name) == 0)
+		return mp_obj_new_int(-4);
+
 	sprintf(name, "U:/%s",file_name);
 
 	audio_record_printf("name = %s\n",name);
@@ -668,6 +696,9 @@ STATIC mp_obj_t helios_audio_record_exists(mp_obj_t self_in,mp_obj_t path)
 	char name[256] = {0};
 	char *file_name = (char*)mp_obj_str_get_str(path);
 
+	if(file_name == NULL||strlen(file_name) == 0)
+		return mp_obj_new_int(-1);
+
 	sprintf(name, "U:/%s",file_name);
 
 	audio_record_printf("name = %s\n",name);
@@ -697,15 +728,19 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_helios_record_file_isBusy_obj, helios_audio_
 STATIC mp_obj_t helios_set_record_callback(mp_obj_t self_in, mp_obj_t callback)
 {
 	audio_record_obj_t *self = MP_OBJ_TO_PTR(self_in);
-	self->callback = callback;
-	g_record_callback = callback;
+
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_record_callback = &cb;
+	mp_sched_schedule_callback_register(g_record_callback, callback);
+	self->callback = g_record_callback;
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(mp_helios_record_file_end_callback_obj, helios_set_record_callback);
 
 
 
-
+#ifdef PLAT_ASR
 STATIC mp_obj_t helios_audio_record_gain(size_t n_args, const mp_obj_t *args)
 {
 	//audio_record_obj_t *self = MP_OBJ_TO_PTR(args[0]);
@@ -720,18 +755,13 @@ STATIC mp_obj_t helios_audio_record_gain(size_t n_args, const mp_obj_t *args)
 		mp_raise_ValueError("invalid dsp_gain value, must be in [-36,12]");
 	}
 
-	audio_record_printf("codec_gain = %d\n",codec_gain);
-	//qpy_set_txcodecgain(codec_gain); //gain:0~4
+	audio_record_printf("codec_gain = %d, dsp_gain = %d\n",codec_gain, dsp_gain);
+	Helios_Audio_GainSet(codec_gain, dsp_gain);
 	
-	audio_record_printf("dsp_gain = %d\n",dsp_gain);
-	//qpy_set_txdspgain(dsp_gain); //gain: -36~12
-
-
 	return mp_obj_new_int(0);
-
-	
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_helios_record_file_gain_obj,3,3, helios_audio_record_gain);
+#endif
 
 static int play_callback(char *p_data, int len, Helios_EnumAudPlayerState state)
 {
@@ -795,8 +825,12 @@ STATIC mp_obj_t helios_audio_deinit(mp_obj_t self_in)
 	if(self->rec_timer) {
 		Helios_OSTimer_Delete(self->rec_timer);
 	}
-	
+
+	g_record_callback = NULL;
+	callback_cur = NULL;
+	record_state = 0;
 	ret = Helios_Audio_FileRecordStop();
+	ret = Helios_Audio_StreamRecordStop();
 	
 	return mp_obj_new_int(ret);
 }
@@ -808,6 +842,7 @@ STATIC const mp_rom_map_elem_t audio_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_start), 		MP_ROM_PTR(&mp_helios_record_file_start_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_stream_start), 		MP_ROM_PTR(&mp_helios_record_stream_start_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_stream_read), 		MP_ROM_PTR(&mp_helios_record_stream_read_obj) 	},
+    { MP_ROM_QSTR(MP_QSTR_stream_stop), 		MP_ROM_PTR(&mp_helios_record_stream_stop_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_stop), 		MP_ROM_PTR(&mp_helios_record_file_stop_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_getFilePath), MP_ROM_PTR(&mp_helios_record_file_getFilePath_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_getData),		MP_ROM_PTR(&mp_helios_record_file_getData_obj) 	},
@@ -816,7 +851,12 @@ STATIC const mp_rom_map_elem_t audio_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_exists),		MP_ROM_PTR(&mp_helios_record_file_exists_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_isBusy),		MP_ROM_PTR(&mp_helios_record_file_isBusy_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_end_callback),		MP_ROM_PTR(&mp_helios_record_file_end_callback_obj) 	},
+#ifdef PLAT_ASR
     { MP_ROM_QSTR(MP_QSTR_gain),		MP_ROM_PTR(&mp_helios_record_file_gain_obj) 	},
+    { MP_ROM_QSTR(MP_QSTR_WAV), MP_ROM_INT(HELIOS_AUDIO_FORMAT_WAVPCM) },
+    { MP_ROM_QSTR(MP_QSTR_AMRNB), MP_ROM_INT(HELIOS_AUDIO_FORMAT_AMRNB) },
+    { MP_ROM_QSTR(MP_QSTR_AMRWB), MP_ROM_INT(HELIOS_AUDIO_FORMAT_AMRWB) },
+#endif
     { MP_ROM_QSTR(MP_QSTR_play),		MP_ROM_PTR(&mp_helios_record_file_play_obj) 	},
 #ifdef PLAT_Unisoc
     { MP_ROM_QSTR(MP_QSTR_PCM), MP_ROM_INT(HELIOS_AUDIO_FORMAT_PCM) },

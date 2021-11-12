@@ -25,9 +25,11 @@
 #include "helios_gpio.h"
 #include "helios_debug.h"
 
-#define HELIOS_PIN_LOG(msg, ...)      custom_log("machine pin", msg, ##__VA_ARGS__)
+#define HELIOS_PIN_LOG(msg, ...)      custom_log("machine_pin", msg, ##__VA_ARGS__)
 //#define HELIOS_PIN_LOG(msg, ...)      QL_LOG_PUSH("machine pin", msg, ##__VA_ARGS__)
 
+#define GPIO_OBJ_DEF(n) {{&machine_pin_type}, HELIOS_GPIO##n, 0, 0, 0}
+#define PLAT_GPIO_OBJ_DEF(n) BOOST_PP_REPEAT_1(n,GPIO_OBJ_DEF)
 
 
 typedef struct _machine_pin_obj_t {
@@ -41,122 +43,7 @@ typedef struct _machine_pin_obj_t {
 const mp_obj_type_t machine_pin_type;
 
 
-enum {
-	GPIO0 = 0,
-	GPIO1,
-	GPIO2,
-	GPIO3,
-	GPIO4,
-	GPIO5,
-	GPIO6,
-	GPIO7,
-	GPIO8,
-	GPIO9,
-	GPIO10,
-	GPIO11,
-	GPIO12,
-	GPIO13,
-	GPIO14,
-	GPIO15,
-	GPIO16,
-	GPIO17,
-	GPIO18,
-	GPIO19,
-	GPIO20,
-	GPIO21,
-	GPIO22,
-	GPIO23,
-	GPIO24,
-	GPIO25,
-	GPIO26,
-	GPIO27,
-	GPIO28,
-	GPIO29,
-	GPIO30,
-	GPIO31,
-	GPIOMAX,
-};
-
-const mp_obj_type_t machine_pin_type;
-
-struct pin_map_t{
-	int export_pin;
-	int internal_pin;
-};
-
-static struct pin_map_t pin_map[] = {
-	{GPIO0,HELIOS_GPIO0},
-	{GPIO1,HELIOS_GPIO1},
-	{GPIO2,HELIOS_GPIO2},
-	{GPIO3,HELIOS_GPIO3},
-	{GPIO4,HELIOS_GPIO4},
-	{GPIO5,HELIOS_GPIO5},
-	{GPIO6,HELIOS_GPIO6},
-	{GPIO7,HELIOS_GPIO7},
-	{GPIO8,HELIOS_GPIO8},
-	{GPIO9,HELIOS_GPIO9},
-	{GPIO10,HELIOS_GPIO10},
-	{GPIO11,HELIOS_GPIO11},
-	{GPIO12,HELIOS_GPIO12},
-	{GPIO13,HELIOS_GPIO13},
-	{GPIO14,HELIOS_GPIO14},
-	{GPIO15,HELIOS_GPIO15},
-	{GPIO16,HELIOS_GPIO16},
-	{GPIO17,HELIOS_GPIO17},
-	{GPIO18,HELIOS_GPIO18},
-	{GPIO19,HELIOS_GPIO19},
-	{GPIO20,HELIOS_GPIO20},
-	{GPIO21,HELIOS_GPIO21},
-	{GPIO22,HELIOS_GPIO22},
-	{GPIO23,HELIOS_GPIO23},
-	{GPIO24,HELIOS_GPIO24},
-	{GPIO25,HELIOS_GPIO25},
-	{GPIO26,HELIOS_GPIO26},
-	{GPIO27,HELIOS_GPIO27},
-	{GPIO28,HELIOS_GPIO28},
-	{GPIO29,HELIOS_GPIO29},
-	{GPIO30,HELIOS_GPIO30},
-	{GPIO31,HELIOS_GPIO31},
-	{GPIOMAX,HELIOS_GPIOMAX},
-
-};
-
-
-
-STATIC machine_pin_obj_t machine_pin_obj[HELIOS_GPIOMAX] = {
-	{{&machine_pin_type}, HELIOS_GPIO0, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO1, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO2, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO3, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO4, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO5, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO6, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO7, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO8, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO9, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO10, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO11, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO12, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO13, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO14, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO15, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO16, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO17, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO18, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO19, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO20, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO21, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO22, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO23, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO24, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO25, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO26, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO27, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO28, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO29, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO30, 0, 0, 0},
-	{{&machine_pin_type}, HELIOS_GPIO31, 0, 0, 0},
-};
+STATIC machine_pin_obj_t *machine_pin_obj[PLAT_GPIO_NUM] = {NULL};
 
 
 STATIC void machine_pin_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -231,28 +118,24 @@ mp_obj_t mp_pin_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, 
 	Helios_Debug_Enable();
 
 	// get the wanted pin object
-	unsigned int i = 0;
-	int tmp_pin = 0,wanted_pin = -1;
-	tmp_pin = mp_obj_get_int(args[0]);
-	//gpio map from export to inter
-	for (i=0;i< sizeof(pin_map);i++){
-		if(pin_map[i].export_pin == tmp_pin){
-			wanted_pin=pin_map[i].internal_pin;
-			break;
-		}
-	}
-	if(wanted_pin == -1) {
+	//unsigned int i = 0;
+	int wanted_pin = 0;
+	wanted_pin = mp_obj_get_int(args[0]);
+
+	if(wanted_pin == 0 || wanted_pin > PLAT_GPIO_NUM) {
 		mp_raise_ValueError("invalid pin");
 	}
 
 	HELIOS_PIN_LOG("wanted_pin = %d\n",wanted_pin);
 	machine_pin_obj_t *self = NULL;
-    if (HELIOS_GPIO0 <= wanted_pin && wanted_pin < HELIOS_GPIOMAX) {
-        self = (machine_pin_obj_t *)&machine_pin_obj[wanted_pin];
-    }
-    if (self == NULL || self->base.type == NULL) {
-        mp_raise_ValueError("invalid pin");
-    }
+
+	if (machine_pin_obj[wanted_pin-1] == NULL)
+	{
+		machine_pin_obj[wanted_pin-1] = m_new_obj_with_finaliser(machine_pin_obj_t);
+	}
+	self = machine_pin_obj[wanted_pin-1];
+	self->base.type = &machine_pin_type;
+	self->pin = wanted_pin;
 	
 	// default settings
 	self->dir = HELIOS_GPIO_OUTPUT;
@@ -352,14 +235,57 @@ STATIC mp_uint_t machine_pin_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_
     return -1;
 }
 
+STATIC mp_obj_t machine_pin_set_dir(mp_obj_t self_in, mp_obj_t dir) 
+{
+    machine_pin_obj_t *self = self_in;
+	int ret = -1;
+	
+    int pin_value = mp_obj_get_int(dir);
+	if((pin_value != HELIOS_GPIO_INPUT) && (pin_value != HELIOS_GPIO_OUTPUT)){
+		mp_raise_ValueError("Invalid direction parameter");
+	}
+	ret = Helios_GPIO_SetDirection((Helios_GPIONum) self->pin, (Helios_GPIODir) pin_value);
+    return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_pin_set_dir_obj, machine_pin_set_dir);
+
+STATIC mp_obj_t machine_pin_get_dir(mp_obj_t self_in) 
+{
+    machine_pin_obj_t *self = self_in;
+	int ret = Helios_GPIO_GetDirection((Helios_GPIONum) self->pin);
+    return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_pin_get_dir_obj, machine_pin_get_dir);
+
+
+STATIC mp_obj_t machine_pin_deinit(mp_obj_t self_in) {
+    machine_pin_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	//HELIOS_PIN_LOG("machine pin deinit.pin=%d.\r\n", self->pin);
+	
+	machine_pin_obj[self->pin - 1] = NULL;
+	
+	int ret = Helios_GPIO_Deinit((Helios_GPIONum)self->pin);
+	if (ret != 0)
+	{
+		HELIOS_PIN_LOG("GPIO%d deinit failed.\r\n", self->pin);
+	}
+	return mp_obj_new_int(ret);
+	
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_pin_deinit_obj, machine_pin_deinit);
+
+
 STATIC const mp_rom_map_elem_t machine_pin_locals_dict_table[] = {
     // instance methods
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&machine_pin_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_init),    MP_ROM_PTR(&machine_pin_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_value),   MP_ROM_PTR(&machine_pin_value_obj) },
     { MP_ROM_QSTR(MP_QSTR_off),     MP_ROM_PTR(&machine_pin_off_obj) },
     { MP_ROM_QSTR(MP_QSTR_on),      MP_ROM_PTR(&machine_pin_on_obj) },
     { MP_ROM_QSTR(MP_QSTR_write),   MP_ROM_PTR(&machine_pin_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_read),    MP_ROM_PTR(&machine_pin_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_dir),    MP_ROM_PTR(&machine_pin_set_dir_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_dir),    MP_ROM_PTR(&machine_pin_get_dir_obj) },
     // class constants 
     //GPIO DEFINE
     { MP_ROM_QSTR(MP_QSTR_IN),        MP_ROM_INT(HELIOS_GPIO_INPUT) },
@@ -367,39 +293,7 @@ STATIC const mp_rom_map_elem_t machine_pin_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_PULL_PU),   MP_ROM_INT(HELIOS_PULL_UP) },
     { MP_ROM_QSTR(MP_QSTR_PULL_PD),   MP_ROM_INT(HELIOS_PULL_DOWN) },
 	{ MP_ROM_QSTR(MP_QSTR_PULL_DISABLE), MP_ROM_INT(HELIOS_PULL_NONE) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO0), MP_ROM_INT(HELIOS_GPIO0) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO1), MP_ROM_INT(HELIOS_GPIO1) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO2), MP_ROM_INT(HELIOS_GPIO2) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO3), MP_ROM_INT(HELIOS_GPIO3) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO4), MP_ROM_INT(HELIOS_GPIO4) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO5), MP_ROM_INT(HELIOS_GPIO5) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO6), MP_ROM_INT(HELIOS_GPIO6) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO7), MP_ROM_INT(HELIOS_GPIO7) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO8), MP_ROM_INT(HELIOS_GPIO8) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO9), MP_ROM_INT(HELIOS_GPIO9) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO10), MP_ROM_INT(HELIOS_GPIO10) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO11), MP_ROM_INT(HELIOS_GPIO11) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO12), MP_ROM_INT(HELIOS_GPIO12) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO13), MP_ROM_INT(HELIOS_GPIO13) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO14), MP_ROM_INT(HELIOS_GPIO14) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO15), MP_ROM_INT(HELIOS_GPIO15) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO16), MP_ROM_INT(HELIOS_GPIO16) },
-#if defined(PLAT_ASR)
-	{ MP_ROM_QSTR(MP_QSTR_GPIO17), MP_ROM_INT(HELIOS_GPIO17) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO18), MP_ROM_INT(HELIOS_GPIO18) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO19), MP_ROM_INT(HELIOS_GPIO19) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO20), MP_ROM_INT(HELIOS_GPIO20) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO21), MP_ROM_INT(HELIOS_GPIO21) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO22), MP_ROM_INT(HELIOS_GPIO22) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO23), MP_ROM_INT(HELIOS_GPIO23) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO24), MP_ROM_INT(HELIOS_GPIO24) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO25), MP_ROM_INT(HELIOS_GPIO25) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO26), MP_ROM_INT(HELIOS_GPIO26) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO27), MP_ROM_INT(HELIOS_GPIO27) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO28), MP_ROM_INT(HELIOS_GPIO28) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO29), MP_ROM_INT(HELIOS_GPIO29) },
-	{ MP_ROM_QSTR(MP_QSTR_GPIO30), MP_ROM_INT(HELIOS_GPIO30) },
-#endif
+	PLAT_GPIO_DEF(PLAT_GPIO_NUM),
 };
 
 STATIC MP_DEFINE_CONST_DICT(machine_pin_locals_dict, machine_pin_locals_dict_table);

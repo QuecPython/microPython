@@ -22,7 +22,10 @@
 #include "stream.h"
 #include "mperrno.h"
 
+#include "mphalport.h"
 #include "helios_uart.h"
+#include "helios_pin.h"
+
 
 typedef struct _machine_uart_obj_t {
     mp_obj_base_t base;
@@ -30,9 +33,9 @@ typedef struct _machine_uart_obj_t {
     Helios_UARTConfig config;
 } machine_uart_obj_t;
 
-static mp_obj_t callback_cur[4] = {0};
+static c_callback_t *callback_cur[4] = {0};
 
-machine_uart_obj_t uart_self_obj[HELIOS_UARTMAX] = {0};
+static machine_uart_obj_t *uart_self_obj[HELIOS_UARTMAX] = {0};
 
 
 const mp_obj_type_t machine_uart_type;
@@ -63,8 +66,6 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
 
 	// get baudrate bits
     switch (args[ARG_baudrate].u_int) {
-        case 0:
-            break;
         case HELIOS_UART_BAUD_300:
 		case HELIOS_UART_BAUD_600:
 		case HELIOS_UART_BAUD_1200:
@@ -106,8 +107,6 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
     }
 #else
     switch (args[ARG_bits].u_int) {
-        case 0:
-            break;
         case 5:
             self->config.data_bit = HELIOS_UART_DATABIT_5;
             break;
@@ -127,8 +126,6 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
 #endif
 	// get parity bits
     switch (args[ARG_parity].u_int) {
-		case -1:
-			break;
         case 0:
 			self->config.parity_bit = HELIOS_UART_PARITY_NONE;
             break;
@@ -145,10 +142,6 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
 
     // get stop bits
     switch (args[ARG_stop].u_int) {
-		case -1:
-			break;
-        case 0:
-            break;
         case 1:
             self->config.stop_bit = HELIOS_UART_STOP_1;
             break;
@@ -162,8 +155,6 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
 
 	// get flow bits
     switch (args[ARG_flow].u_int) {
-		case -1:
-			break;
         case 0:
 			self->config.flow_ctrl = HELIOS_UART_FC_NONE;
             break;
@@ -179,9 +170,13 @@ STATIC void machine_uart_init_helper(machine_uart_obj_t *self, size_t n_args, co
 	uart_para.uart_config = &uart_config;
 	
 	memcpy((void*)&uart_config,(void*)&self->config, sizeof(Helios_UARTConfig));
-	
+	if(self->uart_num == QPY_REPL_UART) {
+		mp_hal_port_open(0);
+	}
+
+	Helios_UART_Deinit((Helios_UARTNum) self->uart_num);
 	if(Helios_UART_Init((Helios_UARTNum) self->uart_num, &uart_para) != 0) {
-		mp_raise_msg_varg(&mp_type_ValueError, "UART(%d) does not exist", self->uart_num);
+		mp_raise_msg_varg(&mp_type_ValueError, "UART(%d) init fail", self->uart_num);
 	}
 }
 
@@ -195,7 +190,11 @@ STATIC mp_obj_t machine_uart_make_new(const mp_obj_type_t *type, size_t n_args, 
     }
 
     // create instance
-    machine_uart_obj_t *self = (machine_uart_obj_t*)&uart_self_obj[uart_num];
+    if (uart_self_obj[uart_num] == NULL)
+    {
+    	uart_self_obj[uart_num] = m_new_obj_with_finaliser(machine_uart_obj_t);
+    }
+	machine_uart_obj_t *self = uart_self_obj[uart_num];
 	
     self->base.type = &machine_uart_type;
     self->uart_num = uart_num;
@@ -222,6 +221,9 @@ STATIC mp_obj_t machine_uart_deinit(mp_obj_t self_in) {
     machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	
 	int ret = Helios_UART_Deinit((Helios_UARTNum) self->uart_num);
+	if(self->uart_num == QPY_REPL_UART) {
+		mp_hal_port_open(1);
+	}
     return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_uart_deinit_obj, machine_uart_deinit);
@@ -235,6 +237,20 @@ STATIC mp_obj_t machine_uart_any(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_uart_any_obj, machine_uart_any);
 
+#if defined (PLAT_ASR)
+STATIC mp_obj_t machine_uart_485_control(mp_obj_t self_in,mp_obj_t gpio_n,mp_obj_t direc) {
+	int ret = -1;
+    machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
+	if ( !(mp_obj_is_small_int(gpio_n) && mp_obj_is_small_int(direc)) ){
+		return mp_obj_new_int(ret);
+	}
+	size_t gpio = mp_obj_get_int(gpio_n);
+	Helios_UART_Direc dire = (Helios_UART_Direc)mp_obj_get_int(direc);
+	ret = Helios_UART_SetCtl_485(self->uart_num,gpio,dire);
+    return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(machine_uart_485_control_obj, machine_uart_485_control);
+#endif
 
 /*
 STATIC mp_obj_t machine_uart_sendbreak(mp_obj_t self_in) {
@@ -259,48 +275,69 @@ void helios_uart_callback_to_python(uint64_t ind_type, Helios_UARTNum port, uint
 	if(callback_cur[port] == NULL) {
 		return;
 	}
-    if(mp_obj_is_callable(callback_cur[port])){
-    	mp_sched_schedule(callback_cur[port], MP_OBJ_FROM_PTR(mp_obj_new_list(3, decode_cb)));
-	}
+	
+    mp_sched_schedule_ex(callback_cur[port], MP_OBJ_FROM_PTR(mp_obj_new_list(3, decode_cb)));
 }
 
 
 STATIC mp_obj_t helios_uart_set_callback(mp_obj_t self_in, mp_obj_t callback)
 {
 	machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
-	callback_cur[self->uart_num] = callback;
+	static c_callback_t cb[sizeof(callback_cur) / sizeof(callback_cur[0])] = {0};
+    memset(&cb[self->uart_num], 0, sizeof(c_callback_t));
+	callback_cur[self->uart_num] = &cb[self->uart_num];
+	mp_sched_schedule_callback_register(callback_cur[self->uart_num], callback);
 	
 	int ret = Helios_UART_SetCallback((Helios_UARTNum) self->uart_num, (Helios_UARTCallback) helios_uart_callback_to_python);
 	return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_uart_set_callback_obj, helios_uart_set_callback);
 
+STATIC mp_obj_t helios_uart_deinit(mp_obj_t self_in)
+{
+    int ret = 0;
+	
+	machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+	uart_self_obj[self->uart_num] = NULL;
+	callback_cur[self->uart_num] = NULL;
+	ret = Helios_UART_Deinit((Helios_UARTNum) self->uart_num);
+
+	if(self->uart_num == QPY_REPL_UART) {
+		mp_hal_port_open(1);
+	}
+
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(helios_uart_deinit_obj, helios_uart_deinit);
 
 
 STATIC const mp_rom_map_elem_t machine_uart_locals_dict_table[] = {
+	{ MP_ROM_QSTR(MP_QSTR___del__), 	MP_ROM_PTR(&helios_uart_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&machine_uart_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&machine_uart_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_any), MP_ROM_PTR(&machine_uart_any_obj) },
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&mp_stream_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_callback), MP_ROM_PTR(&machine_uart_set_callback_obj) },
-   // { MP_ROM_QSTR(MP_QSTR_readline), MP_ROM_PTR(&mp_stream_unbuffered_readline_obj) },
-   // { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
+    { MP_ROM_QSTR(MP_QSTR_readline), MP_ROM_PTR(&mp_stream_unbuffered_readline_obj) },
+    { MP_ROM_QSTR(MP_QSTR_readinto), MP_ROM_PTR(&mp_stream_readinto_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&mp_stream_write_obj) },
-  //  { MP_ROM_QSTR(MP_QSTR_sendbreak), MP_ROM_PTR(&machine_uart_sendbreak_obj) },
+    // { MP_ROM_QSTR(MP_QSTR_sendbreak), MP_ROM_PTR(&machine_uart_sendbreak_obj) },
 	
 #if defined(PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_UART1), MP_ROM_INT(HELIOS_UART1) },
 #endif
 #if defined (PLAT_ASR)
-    { MP_ROM_QSTR(MP_QSTR_UART0), MP_ROM_INT(HELIOS_UART0) },
+	{ MP_ROM_QSTR(MP_QSTR_control_485), MP_ROM_PTR(&machine_uart_485_control_obj) },
+    { MP_ROM_QSTR(MP_QSTR_UART0), MP_ROM_INT(HELIOS_UART0) },    
+	PLAT_GPIO_DEF(PLAT_GPIO_NUM),
 #endif
+
 #if !defined(PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_UART1), MP_ROM_INT(HELIOS_UART1) },
     { MP_ROM_QSTR(MP_QSTR_UART2), MP_ROM_INT(HELIOS_UART2) },
     { MP_ROM_QSTR(MP_QSTR_UART3), MP_ROM_INT(HELIOS_UART3) },
 #endif
-    //{ MP_ROM_QSTR(MP_QSTR_UART4), MP_ROM_INT(HELIOS_UART4) },
-   // { MP_ROM_QSTR(MP_QSTR_UART5), MP_ROM_INT(HELIOS_UART5) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(machine_uart_locals_dict, machine_uart_locals_dict_table);

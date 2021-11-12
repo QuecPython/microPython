@@ -24,11 +24,14 @@ checksum_file = '/usr/checksum.json'
 checksum_file_max_size = 16384
 backup_checksum_file = '/bak/checksum.json'
 
+
 class _checkError(Exception):
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
+
 
 def check():
     if not ql_fs.path_exists(checksum_file):
@@ -46,6 +49,7 @@ def check():
         raise _checkError('%s is empty' % checksum_file)
     return fr
 
+
 def retrieve(file_name):
     # Pawn 2021-01-14 for JIRA STASR3601-2428 begin
     if not file_name.startswith("/"):
@@ -59,9 +63,10 @@ def retrieve(file_name):
             return item['crc32']
     return None
 
-def _flush_checksum(checksum=[]):
+
+def _flush_checksum(checksum=[], file_name=checksum_file):
     json_str = ujson.dumps(checksum)
-    fp = open(checksum_file, 'wt+')
+    fp = open(file_name, 'wt+')
     fp.seek(0)
     wl = fp.write(json_str)
     fp.close()
@@ -69,16 +74,46 @@ def _flush_checksum(checksum=[]):
         return checksum
     return None
 
+
+def bak_update(file_name):
+    # add by Jaxsen xu
+    checksum = ql_fs.read_json(backup_checksum_file)
+
+    if not file_name.startswith("/"):
+        file_name = "/" + file_name
+
+    src_file = file_name[file_name.find("/", 1):]
+    exist_file = False
+    for item in checksum:
+        if item['name'].lower() == src_file.lower():
+            exist_file = True
+            file_crc32_value = file_crc32.calc(file_name)
+            item['crc32'] = file_crc32_value
+    if not exist_file:
+        checksum.append(dict(name=src_file, crc32=file_crc32.calc(file_name)))
+    return _flush_checksum(checksum, file_name=file_name[:file_name.find("/", 1)] + "/checksum.json")
+
+def usr_update(file_name):
+    try:
+        data = ql_fs.read_json(checksum_file)
+        if data is not None:
+            data.append(dict(name=file_name, crc32=file_crc32.calc(file_name)))
+            return ql_fs.touch(checksum_file, data)
+        return None
+    except Exception as e:
+        return None
+
+
 def update(file_name):
     try:
         json_str = check()
         checksum = ujson.loads(json_str)
-        
+
         # Pawn 2021-01-14 for JIRA STASR3601-2428 begin
         if not file_name.startswith("/"):
             file_name = "/" + file_name
         # Pawn 2021-01-14 for JIRA STASR3601-2428 end
-        
+
         for item in checksum:
             if item['name'].lower() == file_name.lower():
                 file_crc32_value = file_crc32.calc(file_name)
@@ -89,11 +124,13 @@ def update(file_name):
     except Exception:
         return None
 
+
 def bulk_update(file_name_list=[]):
     try:
         json_str = check()
         checksum = ujson.loads(json_str)
         need_update = 0
+
         for file_name in file_name_list:
             # Pawn 2021-01-14 for JIRA STASR3601-2428 begin
             if not file_name.startswith("/"):
@@ -111,4 +148,3 @@ def bulk_update(file_name_list=[]):
         return None
     except Exception:
         return None
-

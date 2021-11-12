@@ -36,6 +36,7 @@
 #include "py/bc0.h"
 #include "py/bc.h"
 #include "py/profile.h"
+#include "lib/utils/interrupt_char.h"
 
 // *FORMAT-OFF*
 
@@ -1373,12 +1374,14 @@ pending_exception_check:
                         MARK_EXC_IP_SELECTIVE();
                         mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
                         if (obj != MP_OBJ_NULL) {
+                            CHECK_MAINPY_KBD_INTERRUPT_ENTER()
                             MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
                             if (!mp_sched_num_pending()) {
                                 MP_STATE_VM(sched_state) = MP_SCHED_IDLE;
                             }
                             MICROPY_END_ATOMIC_SECTION(atomic_state);
                             RAISE(obj);
+                            CHECK_MAINPY_KBD_INTERRUPT_EXIT()
                         }
                         mp_handle_pending_tail(atomic_state);
                     } else {
@@ -1388,10 +1391,12 @@ pending_exception_check:
                 #else
                 // This is an inlined variant of mp_handle_pending
                 if (MP_STATE_VM(mp_pending_exception) != MP_OBJ_NULL) {
+                    CHECK_MAINPY_KBD_INTERRUPT_ENTER()
                     MARK_EXC_IP_SELECTIVE();
                     mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
                     MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
                     RAISE(obj);
+                    CHECK_MAINPY_KBD_INTERRUPT_EXIT()
                 }
                 #endif
 

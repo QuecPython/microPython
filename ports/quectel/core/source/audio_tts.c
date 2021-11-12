@@ -17,11 +17,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include "runtime.h"
-#include "utf8togbk.h"
 #include "audio_queue.h"
 #include "helios_audio.h"
 #include "helios_debug.h"
 #include "objstr.h"
+
+#define MAX_TTS_TEXT_LEN (500)
+
+enum {
+    TTS_MOD_UCS2_BE=1,
+    TTS_MOD_GBK,
+    TTS_MOD_UCS2_LE,
+    TTS_MOD_UTF8,
+};
 
 const mp_obj_type_t audio_tts_type;
 
@@ -31,10 +39,10 @@ typedef struct _audio_tts_obj_t {
 	int tts_speed;
 } audio_tts_obj_t;
 
-static mp_obj_t g_tts_callback;
+static c_callback_t *g_tts_callback;
+static audio_tts_obj_t *tts_obj = NULL;
 
-
-#define HELIOS_TTS_LOG(fmt, ...) custom_log(audio_audio, fmt, ##__VA_ARGS__)
+#define HELIOS_TTS_LOG(fmt, ...) custom_log(audio_TTS, fmt, ##__VA_ARGS__)
 
 /*=============================================================================*/
 /* FUNCTION: helios_set_tts_callback                                               */
@@ -47,7 +55,11 @@ static mp_obj_t g_tts_callback;
 /*=============================================================================*/
 STATIC mp_obj_t helios_set_tts_callback(mp_obj_t self_in, mp_obj_t callback)
 {
-	g_tts_callback = callback;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_tts_callback = &cb;
+	mp_sched_schedule_callback_register(g_tts_callback, callback);
+	
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(helios_set_tts_callback_obj, helios_set_tts_callback);
@@ -60,7 +72,7 @@ static void user_tts_callback(Helios_TTSENvent event)
 	if (g_tts_callback)
 	{
 		//uart_printf("[TTS] callback start.\r\n");
-		mp_sched_schedule(g_tts_callback, mp_obj_new_int(event));
+		mp_sched_schedule_ex(g_tts_callback, mp_obj_new_int(event));
 		//uart_printf("[TTS] callback end.\r\n");
 	}
 }
@@ -127,10 +139,15 @@ STATIC mp_obj_t audio_tts_make_new(const mp_obj_type_t *type,
 	
 	Helios_Audio_SetAudioChannle(device);
 
-    audio_tts_obj_t *self = m_new_obj(audio_tts_obj_t);
+    if(NULL == tts_obj)
+    {
+        tts_obj = m_new_obj_with_finaliser(audio_tts_obj_t);
+    }
+    
+    audio_tts_obj_t *self = tts_obj;
     self->base.type = &audio_tts_type;
 	self->inited = 0;
-	self->tts_speed = 5;
+	self->tts_speed = 4;//5 changed by freddy@20211008
 
 	if (audio.inited == 0)
 	{
@@ -169,7 +186,6 @@ STATIC mp_obj_t audio_tts_make_new(const mp_obj_type_t *type,
 		}
 	}
 	
-#ifdef PLAT_ASR
 	int ret = Helios_TTS_Init(app_helios_tts_callback);
 	if (ret == 0)
 	{
@@ -180,7 +196,7 @@ STATIC mp_obj_t audio_tts_make_new(const mp_obj_type_t *type,
 		mp_raise_ValueError("TTS Init failed.");
 	}
 	Helios_TTS_SetSpeed(self->tts_speed);
-#endif
+
     return MP_OBJ_FROM_PTR(self);
 }
 
@@ -218,7 +234,8 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
     mp_arg_val_t vals[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args - 1, args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, vals);
 
-    int new_mode = vals[ARG_mode].u_int;
+    int new_mode = vals[ARG_mode].u_int & 0x0000000F;
+    int wtts_mod_mask = vals[ARG_mode].u_int & 0x000000F0;
 
 	if ((new_mode < 1) || (new_mode > 3))
 	{
@@ -226,19 +243,16 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 		mp_raise_ValueError("invalid mode");
 		return mp_obj_new_int(-1);
 	}
-    
-	//char *new_data;
-	const char *src_data;
-	if (mp_obj_is_str(vals[ARG_data].u_obj)) 
-	{
-		src_data = mp_obj_str_get_str(vals[ARG_data].u_obj);
-	} 
-	else 
-	{	
-		src_data = NULL;
-		mp_raise_ValueError("invalid data");
-	}
-	HELIOS_TTS_LOG("src_data is %s\n",src_data);
+
+    if(new_mode == 2)
+    {
+        new_mode = TTS_MOD_UTF8;//UTF8 mode
+    }
+
+    new_mode |= (uint8_t)wtts_mod_mask;
+
+	mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(vals[ARG_data].u_obj, &bufinfo, MP_BUFFER_READ);
 
 	int new_priority = vals[ARG_priority].u_int;
 	int new_breakin  = vals[ARG_breakin].u_int;
@@ -249,19 +263,10 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 		mp_raise_ValueError("invalid breakin value, must be in [0,1]");
 	}
 	
-	char new_data[500] = {0};
-	int  gbk_len = 500;
-	int  src_len = strlen(src_data);
-	if(src_len > gbk_len) {
-		mp_raise_ValueError("The string length cannot be greater than 500");
+	if(bufinfo.len > MAX_TTS_TEXT_LEN) {
+		mp_raise_msg_varg(&mp_type_ValueError, "The string length cannot be greater than %d", MAX_TTS_TEXT_LEN);
 	}
-	int retval = SwitchToGbk((const unsigned char *)src_data, strlen(src_data), (unsigned char *)new_data, &gbk_len);
-	if (retval != 0)
-	{
-		return mp_obj_new_int(-1);
-	}
-	HELIOS_TTS_LOG("gbk data len : %d, strlen = %d\r\n", gbk_len, strlen(new_data));
-
+    
 	Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 	if (audio.audio_state == AUDIO_IDLE)
 	{
@@ -306,7 +311,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 					audio.audio_queue[new_priority].audio_data[rear].breakin  = new_breakin;
 					audio.audio_queue[new_priority].audio_data[rear].mode     = new_mode;
 					memset(audio.audio_queue[new_priority].audio_data[rear].data, 0, 500);
-					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, new_data, gbk_len);
+					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, bufinfo.buf, bufinfo.len);
 					audio.audio_queue[new_priority].rear = rear;
 					audio.audio_queue[new_priority].front = front;
 					audio.total_nums++;
@@ -344,7 +349,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 					audio.audio_queue[new_priority].audio_data[rear].breakin  = new_breakin;
 					audio.audio_queue[new_priority].audio_data[rear].mode     = new_mode;
 					memset(audio.audio_queue[new_priority].audio_data[rear].data, 0, 500);
-					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, new_data, gbk_len);
+					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, bufinfo.buf, bufinfo.len);
 					audio.audio_queue[new_priority].rear = rear;
 					audio.total_nums++;
 					Helios_Mutex_Unlock(audio.queue_mutex);
@@ -386,7 +391,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 				audio.audio_queue[new_priority].audio_data[rear].breakin  = new_breakin;
 				audio.audio_queue[new_priority].audio_data[rear].mode     = new_mode;
 				memset(audio.audio_queue[new_priority].audio_data[rear].data, 0, 500);
-				strncpy(audio.audio_queue[new_priority].audio_data[rear].data, new_data, gbk_len);
+				strncpy(audio.audio_queue[new_priority].audio_data[rear].data, bufinfo.buf, bufinfo.len);
 				audio.audio_queue[new_priority].rear = rear;
 				audio.audio_queue[new_priority].front = front;
 				audio.total_nums++;
@@ -401,8 +406,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 	    }
 	}
 	
-#ifdef PLAT_ASR
-	int ret = Helios_TTS_Start(new_mode, new_data, gbk_len);
+	int ret = Helios_TTS_Start(new_mode, bufinfo.buf, bufinfo.len);
 	if (ret == -1)
 	{
 		Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
@@ -410,15 +414,10 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 		Helios_Mutex_Unlock(audio.queue_mutex);
 	}
 	return mp_obj_new_int(ret);
-#else
-	return mp_obj_new_int(0);
-#endif	
-    
 }
 MP_DEFINE_CONST_FUN_OBJ_KW(audio_tts_play_obj, 1, audio_tts_play);
 
 STATIC mp_obj_t audio_tts_init(mp_obj_t self_in) {
-#ifdef PLAT_ASR
     audio_tts_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	int ret = Helios_TTS_Init(NULL);
 	if (ret == -1)
@@ -426,13 +425,12 @@ STATIC mp_obj_t audio_tts_init(mp_obj_t self_in) {
 		return mp_obj_new_int(-1);
 	}
 	self->inited = 1;
-#endif
+
     return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_tts_init_obj, audio_tts_init);
 
 STATIC mp_obj_t audio_tts_deinit(mp_obj_t self_in) {
-#ifdef PLAT_ASR
     audio_tts_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
 	int ret = Helios_TTS_Deinit();
@@ -441,7 +439,7 @@ STATIC mp_obj_t audio_tts_deinit(mp_obj_t self_in) {
 		return mp_obj_new_int(-1);
 	}
 	self->inited = 0;
-#endif
+
     return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_tts_deinit_obj, audio_tts_deinit);
@@ -449,9 +447,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(audio_tts_deinit_obj, audio_tts_deinit);
 STATIC mp_obj_t aduio_tts_stop(mp_obj_t self_in)
 {
 	//audio_tts_obj_t *self = MP_OBJ_TO_PTR(self_in);
-#ifdef PLAT_ASR
 	Helios_TTS_Stop();
-#endif
     return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts_stop_obj, aduio_tts_stop);
@@ -469,9 +465,9 @@ STATIC mp_obj_t aduio_tts_stop_all(mp_obj_t self_in)
 	audio.total_nums = 0;
 	//audio.audio_state = AUDIO_IDLE;
 	Helios_Mutex_Unlock(audio.queue_mutex);
-#ifdef PLAT_ASR
+
 	Helios_TTS_Stop();
-#endif
+
     return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts_stop_all_obj, aduio_tts_stop_all);
@@ -488,7 +484,6 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts_stop_all_obj, aduio_tts_stop_all);
 /*=============================================================================*/
 STATIC mp_obj_t aduio_tts_set_volume(mp_obj_t self_in, mp_obj_t volume)
 {
-#ifdef PLAT_ASR
 	int index = mp_obj_get_int(volume);
 	if ((index > 9) || (index < 0))
 	{
@@ -498,9 +493,6 @@ STATIC mp_obj_t aduio_tts_set_volume(mp_obj_t self_in, mp_obj_t volume)
 	
 	//int vol_map[10] = {-32768, -25487, -18206, -10925, -3644, 3637, 10918, 18199, 25480, 32761};
 	int ret = Helios_TTS_SetVolume(index);			//first para only works in unisoc
-#else
-	int ret = 0;
-#endif
     return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(aduio_tts_set_volume_obj, aduio_tts_set_volume);
@@ -519,11 +511,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(aduio_tts_set_volume_obj, aduio_tts_set_volume)
 /*=============================================================================*/
 STATIC mp_obj_t aduio_tts_get_volume(mp_obj_t self_in)
 {
-#ifdef PLAT_ASR
 	int vol = Helios_TTS_GetVolume();
-#else
-	int vol = 0;
-#endif
     return mp_obj_new_int(vol);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts_get_volume_obj, aduio_tts_get_volume);
@@ -549,16 +537,13 @@ STATIC mp_obj_t aduio_tts_set_speed(mp_obj_t self_in, mp_obj_t speed)
 		return mp_obj_new_int(-1);
 	}
 	self->tts_speed = index;
-#ifdef PLAT_ASR
+
 	int ret = Helios_TTS_SetSpeed(self->tts_speed);
 	if(ret)
 	{
 		HELIOS_TTS_LOG("Helios_TTS_SetSpeed failed\n");
 	}
     return mp_obj_new_int(ret);
-#else
-	return mp_obj_new_int(-1);
-#endif
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(aduio_tts_set_speed_obj, aduio_tts_set_speed);
 
@@ -577,27 +562,53 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_2(aduio_tts_set_speed_obj, aduio_tts_set_speed);
 STATIC mp_obj_t aduio_tts_get_speed(mp_obj_t self_in)
 {
 	audio_tts_obj_t *self = MP_OBJ_TO_PTR(self_in);
-#ifdef PLAT_ASR
+
     return mp_obj_new_int(Helios_TTS_GetSpeed());
-#else
-	return mp_obj_new_int(self->tts_speed);
-#endif
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts_get_speed_obj, aduio_tts_get_speed);
 
 
 STATIC mp_obj_t aduio_tts_get_state(mp_obj_t self_in)
 {
-#ifdef PLAT_ASR
 	int state = Helios_TTS_GetStatus();
     return mp_obj_new_int(state);
-#else
-	return mp_obj_new_int(-1);
-#endif
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts_get_state_obj, aduio_tts_get_state);
 
+STATIC mp_obj_t aduio_tts___del__(mp_obj_t self_in)
+{
+#ifdef PLAT_ASR
+    audio_tts_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    uint8_t i = 0;
+	Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
+	for (i=0; i<QUEUE_NUMS; i++)
+	{
+		audio_queue_init(&audio.audio_queue[i]);
+	}
+	audio.cur_priority = 0;
+	audio.cur_breakin  = 0;
+	audio.total_nums = 0;
+	//audio.audio_state = AUDIO_IDLE;
+	Helios_Mutex_Unlock(audio.queue_mutex);
+
+	Helios_TTS_Stop();
+	
+	int ret = Helios_TTS_Deinit();
+	if (ret == -1)
+	{
+		return mp_obj_new_int(-1);
+	}
+	self->inited = 0;
+#endif
+    tts_obj = NULL;
+    g_tts_callback = NULL;
+    return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(aduio_tts___del___obj, aduio_tts___del__);
+
 STATIC const mp_rom_map_elem_t audio_tts_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&aduio_tts___del___obj) },
 	{ MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&audio_tts_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&audio_tts_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_play), MP_ROM_PTR(&audio_tts_play_obj) },
@@ -610,6 +621,14 @@ STATIC const mp_rom_map_elem_t audio_tts_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_getSpeed), MP_ROM_PTR(&aduio_tts_get_speed_obj) },
     { MP_ROM_QSTR(MP_QSTR_getState), MP_ROM_PTR(&aduio_tts_get_state_obj) },
     { MP_ROM_QSTR(MP_QSTR_setCallback), MP_ROM_PTR(&helios_set_tts_callback_obj) },
+    { MP_ROM_QSTR(MP_QSTR_text_utf16be), MP_ROM_INT(1) },
+    { MP_ROM_QSTR(MP_QSTR_text_utf8), MP_ROM_INT(2) },
+    { MP_ROM_QSTR(MP_QSTR_text_utf16le), MP_ROM_INT(3) },
+#if defined(CONFIG_VIOCE_CALL)
+    { MP_ROM_QSTR(MP_QSTR_wtts_enable), MP_ROM_INT(0x80) },
+    { MP_ROM_QSTR(MP_QSTR_wtts_ul_enable), MP_ROM_INT(0x40) },
+    { MP_ROM_QSTR(MP_QSTR_wtts_dl_enable), MP_ROM_INT(0x20) },
+#endif
 };
 
 STATIC MP_DEFINE_CONST_DICT(audio_tts_locals_dict, audio_tts_locals_dict_table);

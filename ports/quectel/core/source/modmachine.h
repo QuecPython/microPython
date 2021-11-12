@@ -39,6 +39,9 @@ extern const mp_obj_type_t machine_hard_i2c_type;
 extern const mp_obj_type_t machine_hard_spi_type;
 extern const mp_obj_type_t machine_wdt_type;
 extern const mp_obj_type_t machine_nandflash_type;
+#if defined(PLAT_ASR)
+extern const mp_obj_type_t machine_keypad_type;
+#endif
 
 
 

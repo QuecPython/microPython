@@ -216,8 +216,6 @@ PY_EXTMOD_O_BASENAME = \
 	extmod/moduzlib.o \
 	extmod/moduheapq.o \
 	extmod/modutimeq.o \
-	extmod/moduhashlib.o \
-	extmod/moducryptolib.o \
 	extmod/modubinascii.o \
 	extmod/virtpin.o \
 	extmod/machine_mem.o \
@@ -229,6 +227,7 @@ PY_EXTMOD_O_BASENAME = \
 	extmod/modbluetooth.o \
 	extmod/modurandom.o \
 	extmod/moduselect.o \
+	extmod/moduasyncio.o \
 	extmod/moduwebsocket.o \
 	extmod/modwebrepl.o \
 	extmod/modframebuf.o \
@@ -242,21 +241,33 @@ PY_EXTMOD_O_BASENAME = \
 	extmod/vfs_lfs.o \
 	extmod/utime_mphal.o \
 	extmod/uos_dupterm.o \
+	extmod/moduhashlib.o \
+	extmod/moducryptolib.o \
 	lib/embed/abort_.o \
 	lib/utils/printf.o \
-	lib/utils/sys_stdio_mphal.o 
+	lib/utils/sys_stdio_mphal.o
+
+ifeq ($(strip $(PLAT)),Qualcomm)
+PY_EXTMOD_O_BASENAME += \
+	extmod/vfs_efs.o \
+	extmod/vfs_efs_file.o \
+	extmod/modussl_mbedtls.o
+endif
 
 ifneq ($(strip $(PLAT)),RDA)
+ifneq ($(strip $(PLAT)),Qualcomm)
 PY_EXTMOD_O_BASENAME += \
 	extmod/modussl_axtls.o \
 	extmod/modussl_mbedtls.o 
 
+endif
 endif
 
 # Sources that may contain qstrings
 SRC_QSTR_IGNORE = py/nlr%
 SRC_QSTR += $(SRC_MOD) $(filter-out $(SRC_QSTR_IGNORE),$(PY_CORE_O_BASENAME:.o=.c)) $(PY_EXTMOD_O_BASENAME:.o=.c)
 
+ifneq ($(strip $(PLAT)),Qualcomm)
 SRC_QSTR += source/quecpython.c \
 			source/moddev.c \
 			source/moduos.c \
@@ -269,53 +280,101 @@ SRC_QSTR += source/quecpython.c \
             source/machine_pin.c \
             source/machine_timer.c \
             source/machine_rtc.c \
+			source/machine_uart.c \
 			source/modutime.c \
 			source/modmisc.c \
             source/misc_power.c \
             source/misc_powerkey.c \
-            source/misc_pwm.c \
             source/misc_adc.c \
-            source/misc_usb.c \
             source/modsocket.c \
+			source/modfota.c \
             source/modnet.c \
             source/moddatacall.c \
 			source/modsim.c \
-            
+			source/modlpm.c \
+			source/machine_extint.c \
+			source/machine_hw_spi.c \
+			source/machine_iic.c
+else
+SRC_QSTR += source/quecpython.c \
+			source/moduos.c \
+			source/modexample.c \
+			source/modsha1.c \
+			source/modutils.c \
+            source/utils_crc32.c \
+			source/modostimer.c \
+			source/modutime.c \
+			source/modmachine.c \
+			source/machine_uart.c \
+			source/machine_pin.c \
+			source/machine_timer.c \
+			source/modsocket.c \
+			source/modfota.c \
+			source/moddatacall.c \
+			source/machine_extint.c \
+			source/machine_hw_spi.c	\
+			source/modmisc.c \
+            source/misc_power.c \
+            source/misc_adc.c \
+            source/modsim.c \
+            source/modnet.c \
+			source/machine_iic.c \
+			source/moddev.c \
+			source/misc_powerkey.c \
+			source/modlpm.c
+
+endif
+			
 ifeq ($(strip $(PLAT)),ASR)
-SRC_QSTR += source/modsecuredata.c
+SRC_QSTR += source/modsecuredata.c \
+			source/misc_usbnet.c \
+			source/machine_keypad.c \
+			source/modslipif.c \
+			source/modethernet.c \
+			source/modethernet_dm9051.c
+endif
+
+ifeq ($(strip $(PLAT)),RDA)
+SRC_QSTR += source/modnb.c \
+            source/nb_oc.c \
+			source/nb_aep.c \
+			source/nb_onenet.c
 endif
 
 ifneq ($(strip $(PLAT)),RDA)
-SRC_QSTR += source/utf8togbk.c \
-			source/modsms.c \
-			source/machine_extint.c \
-			source/machine_hw_spi.c \
-			source/machine_iic.c \
-			source/machine_uart.c \
+ifneq ($(strip $(PLAT)),Qualcomm)
+SRC_QSTR += source/modsms.c \
 			source/machine_wdt.c \
 			source/machine_lcd.c \
-			source/modlpm.c \
 			source/modcelllocator.c \
 			source/modwifiscan.c \
 			source/modaudio.c \
 			source/audio_audio.c \
 			source/audio_record.c \
 			source/audio_queue.c \
-			source/audio_tts.c \
 			source/sensor_sn95500.c \
 			source/modsensor.c \
+            source/misc_usb.c \
+            source/misc_pwm.c \
 			source/modvoicecall.c
 
 #quecthing
 ifeq ($(CONFIG_QUECTHING), y)
-SRC_QSTR += \
-			source/modquecIot.c
+ifeq ($(strip $(PLAT)),$(filter $(PLAT),ASR Unisoc))
+SRC_QSTR += source/modquecIot.c
+endif
 endif
 
 #spinand
 ifeq ($(CONFIG_SPINAND), y)
 SRC_QSTR += \
 			source/machine_nandflash.c
+endif
+
+#qrcode
+ifeq ($(CONFIG_QRCODE), y)
+SRC_QSTR += \
+			source/modqrcode.c
 endif
 
 #camera
@@ -340,23 +399,27 @@ SRC_QSTR += \
 endif
 
 endif
-
-
-ifeq ($(strip $(PLAT)),Unisoc)
-SRC_QSTR += source/modgnss.c \
-			source/modble.c
 endif
 
-ifeq ($(strip $(PLAT)),ASR)
-SRC_QSTR += source/modfota.c
-else 
 ifeq ($(strip $(PLAT)),Unisoc)
-SRC_QSTR += source/modfota.c
+SRC_QSTR += source/modgnss.c
 endif
+
+ifeq ($(CONFIG_BT), y)
+SRC_QSTR += source/modble.c
+endif
+
+ifeq (y,$(CONFIG_POC))
+SRC_QSTR += \
+			source/modpoc.c
 endif
 
 ifeq ($(CONFIG_RTMP), y)
 SRC_QSTR += source/modrtmp.c
+endif
+
+ifeq ($(CONFIG_TTS), y)
+SRC_QSTR += source/audio_tts.c
 endif
 
 $(BUILD)/%.pp: %.c
@@ -393,6 +456,26 @@ $(HEADER_BUILD)/moduledefs.h: $(SRC_QSTR) $(QSTR_GLOBAL_DEPENDENCIES) | $(HEADER
 	$(Q)$(PYTHON) $(PY_SRC)/makemoduledefs.py --vpath="., $(TOP), $(USER_C_MODULES)" $(SRC_QSTR) > $@
 
 SRC_QSTR += $(HEADER_BUILD)/moduledefs.h
+
+ifeq ($(strip $(PLAT)),Qualcomm)
+INC += -I$(COMPILER_PATH)/armv7m-none-eabi/libc/include
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/c-utility
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/c-utility/inc
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/c-utility/inc/azure_c_shared_utility
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/c-utility/pal
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/c-utility/pal/generic
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/iothub_client
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/iothub_client/inc
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/iothub_client/inc/internal
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/serializer
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/serializer/inc
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/umqtt
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/umqtt/inc
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/azure_api/umqtt/inc/azure_umqtt_c
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/qapi
+INC += -I$(ROOT)/system/platform/$(strip $(PLAT))/boards/$(strip $(BOARD))/include/threadx_api
+endif
 
 INC += -I.
 INC += -I$(HEADER_BUILD)
@@ -450,6 +533,8 @@ else
 ifeq ($(strip $(PLAT)),ASR)
 INC += -I$(ROOT)/system/lwip/$(strip $(PLAT))
 INC += -I$(ROOT)/system/lwip/$(strip $(PLAT))/include
+else
+INC += -I$(ROOT)/system/lwip/$(strip $(PLAT))/include
 endif
 endif
 endif
@@ -477,6 +562,9 @@ INC += -I$(ROOT)/components/lvgl/src/lv_misc
 INC += -I$(ROOT)/components/lvgl/src/lv_objx
 INC += -I$(ROOT)/components/lvgl/src/lv_themes
 endif
+ifeq (y, $(CONFIG_QRCODE))
+INC += -I$(ROOT)/components/qrcode
+endif
 ifeq (y, $(CONFIG_QUECTHING))
 INC += -I$(ROOT)/components/quecsdk/cloud
 INC += -I$(ROOT)/components/quecsdk/driverLayer 
@@ -499,6 +587,14 @@ INC += -I$(ROOT)/utilities
 ifeq ($(CONFIG_JPEG), y)
 INC += -I$(ROOT)/components/jpeg/jpeg-9c
 INC += -I$(ROOT)/components/jpeg
+endif
+ifeq ($(CONFIG_POC_BND), y)
+INC += -I$(ROOT)/components/poc
+INC += -I$(ROOT)/components/poc/bnd/inc
+endif
+ifeq ($(CONFIG_POC_SL), y)
+INC += -I$(ROOT)/components/poc
+INC += -I$(ROOT)/components/poc/sl/inc
 endif
 ifeq (y,$(CONFIG_CAMERA_DECODE))
 INC += -I$(ROOT)/components/ZBar/zbar
@@ -571,6 +667,8 @@ $(BUILD)/_frozen_mpy.c: $(BUILD)/_boot_RDA.mpy \
 						$(BUILD)/system.mpy \
 						$(BUILD)/dataCall.mpy \
 						$(BUILD)/umqtt.mpy \
+						$(BUILD)/sys_bus.mpy \
+						$(BUILD)/queue.mpy \
 						$(BUILD)/log.mpy \
 						$(HEADER_BUILD)/qstrdefs.generated.h
 	@$(ECHO) "MISC freezing bytecode"
@@ -580,7 +678,29 @@ $(BUILD)/_frozen_mpy.c: $(BUILD)/_boot_RDA.mpy \
 						$(BUILD)/system.mpy \
 						$(BUILD)/dataCall.mpy \
 						$(BUILD)/umqtt.mpy \
+						$(BUILD)/sys_bus.mpy \
+						$(BUILD)/queue.mpy \
 						$(BUILD)/log.mpy \
+						> $@
+
+else
+ifeq ($(strip $(PLAT)),Qualcomm)
+$(BUILD)/_frozen_mpy.c: $(BUILD)/_boot_Qualcomm.mpy \
+						$(BUILD)/system.mpy \
+						$(BUILD)/dataCall.mpy \
+						$(BUILD)/umqtt.mpy \
+						$(BUILD)/log.mpy \
+						$(BUILD)/request.mpy \
+						$(HEADER_BUILD)/qstrdefs.generated.h
+	@$(ECHO) "MISC freezing bytecode"
+	$(Q)$(MPY_TOOL) -f -q \
+						$(HEADER_BUILD)/qstrdefs.preprocessed.h \
+						$(BUILD)/_boot_Qualcomm.mpy \
+						$(BUILD)/system.mpy \
+						$(BUILD)/dataCall.mpy \
+						$(BUILD)/umqtt.mpy \
+						$(BUILD)/log.mpy \
+						$(BUILD)/request.mpy \
 						> $@
 
 else
@@ -611,6 +731,8 @@ $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/queue.mpy \
 						$(BUILD)/sys_bus.mpy \
 						$(BUILD)/event_message.mpy \
+						$(BUILD)/hls.mpy \
+						$(BUILD)/bak_util.mpy \
 						$(HEADER_BUILD)/qstrdefs.generated.h
 	@$(ECHO) "MISC freezing bytecode"
 	$(Q)$(MPY_TOOL) -f -q \
@@ -641,8 +763,10 @@ $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/queue.mpy \
 						$(BUILD)/sys_bus.mpy \
 						$(BUILD)/event_message.mpy \
+						$(BUILD)/hls.mpy \
+						$(BUILD)/bak_util.mpy \
 						> $@
-
+endif
 endif
 $(BUILD):
 	$(Q)echo creating directory: $@

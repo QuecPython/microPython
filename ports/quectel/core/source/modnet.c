@@ -676,7 +676,7 @@ STATIC mp_obj_t qpy_net_get_cell_info(void)
 			for (i=0; i<info.lte_info_num; i++)
 			{
 				//Pawn.zhou Edit 2020/12/18
-				mp_obj_t lte[8] = {
+				mp_obj_t lte[9] = {
 					mp_obj_new_int(info.lte_info[i].flag),
 					mp_obj_new_int(info.lte_info[i].cid),
 					mp_obj_new_int(info.lte_info[i].mcc),
@@ -684,9 +684,10 @@ STATIC mp_obj_t qpy_net_get_cell_info(void)
 					mp_obj_new_int(info.lte_info[i].pci),
 					mp_obj_new_int(info.lte_info[i].tac),
 					mp_obj_new_int(info.lte_info[i].earfcn),
-					mp_obj_new_int(info.lte_info[i].rssi)};
+					mp_obj_new_int(info.lte_info[i].rssi),
+					mp_obj_new_int(info.lte_info[i].rsrq)};
 
-				mp_obj_list_append(list_lte, mp_obj_new_tuple(8, lte));
+				mp_obj_list_append(list_lte, mp_obj_new_tuple(9, lte));
 			}
 		}
 
@@ -749,8 +750,10 @@ STATIC mp_obj_t qpy_net_set_modem_fun(size_t n_args, const mp_obj_t *args)
 	}
 	
 	modem_fun = (uint8_t)mp_obj_get_int(args[0]);
-	
+
+	MP_THREAD_GIL_EXIT();
 	ret = Helios_Dev_SetModemFunction(modem_fun, rst);
+	MP_THREAD_GIL_ENTER();
 	if (ret == 0)
 	{
 		return mp_obj_new_int(0);
@@ -759,8 +762,55 @@ STATIC mp_obj_t qpy_net_set_modem_fun(size_t n_args, const mp_obj_t *args)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_net_set_modem_fun_obj, 1, 2, qpy_net_set_modem_fun);
 
+STATIC mp_obj_t qpy_net_set_apn(mp_obj_t apn, mp_obj_t simid)
+{
+#if defined(PLAT_ASR)// || defined(PLAT_Unisoc)
+	char *net_apn = (char *)mp_obj_str_get_str(apn);
+    uint8_t net_simid = mp_obj_get_int(simid);
+    int ret = 0;
 
-static mp_obj_t g_net_user_callback = NULL;
+    if ((net_simid != 0) && (net_simid != 1))
+    {
+        mp_raise_ValueError("invalid simid.");
+    }
+
+    ret = Helios_Nw_SetApn(net_apn, net_simid);
+	if (ret == 0)
+	{
+		return mp_obj_new_int(0);
+	}
+	return mp_obj_new_int(-1);
+#else
+    return mp_obj_new_int(-1);
+#endif
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_net_set_apn_obj, qpy_net_set_apn);
+
+STATIC mp_obj_t qpy_net_get_apn(mp_obj_t simid)
+{
+#if defined(PLAT_ASR)// || defined(PLAT_Unisoc)
+    uint8_t net_simid = mp_obj_get_int(simid);
+    int ret = 0;
+    char apn[99+1] = {0};
+
+    if ((net_simid != 0) && (net_simid != 1))
+    {
+        mp_raise_ValueError("invalid simid.");
+    }
+
+    ret = Helios_Nw_GetApn(apn, net_simid);
+	if (ret == 0)
+	{
+		return mp_obj_new_str(apn, strlen(apn));
+	}
+	return mp_obj_new_int(-1);
+#else
+        return mp_obj_new_int(-1);
+#endif
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_net_get_apn_obj, qpy_net_get_apn);
+
+static c_callback_t *g_net_user_callback = NULL;
 
 static void qpy_net_event_handler(uint8_t sim_id, int32_t event_id, void *ctx)
 {
@@ -781,7 +831,7 @@ static void qpy_net_event_handler(uint8_t sim_id, int32_t event_id, void *ctx)
 			if (g_net_user_callback)
 			{
 				QPY_NET_LOG("[net] callback start.\r\n");
-				mp_sched_schedule(g_net_user_callback, mp_obj_new_tuple(5, tuple));
+				mp_sched_schedule_ex(g_net_user_callback, mp_obj_new_tuple(5, tuple));
 				QPY_NET_LOG("[net] callback end.\r\n");
 			}
 			break;
@@ -818,19 +868,45 @@ static void qpy_net_event_handler(uint8_t sim_id, int32_t event_id, void *ctx)
 /*=============================================================================*/
 STATIC mp_obj_t qpy_net_add_event_handler(mp_obj_t handler)
 {
-	g_net_user_callback = handler;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_net_user_callback = &cb;
+	mp_sched_schedule_callback_register(g_net_user_callback, handler);
 	Helios_NwInitStruct info = {0};
 
 	info.user_cb = qpy_net_event_handler;
 	Helios_Nw_Init(&info);
 	return mp_obj_new_int(0);
 }
+#if !defined (PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_net_add_event_handler_obj, qpy_net_add_event_handler);
+#endif
 
+/*=============================================================================*/
+/* FUNCTION: qpy_module_net_deinit                                         */
+/*=============================================================================*/
+/*!@brief: deinit net module
+ *	
+ *
+ * @return:
+ *     0	-	success
+ */
+/*=============================================================================*/
+STATIC mp_obj_t qpy_module_net_deinit(void)
+{
+	QPY_NET_LOG("module net deinit.\r\n");
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+	Helios_Nw_Deinit();
+#endif
+	g_net_user_callback = NULL;
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_net_deinit_obj, qpy_module_net_deinit);
 
 
 STATIC const mp_rom_map_elem_t net_module_globals_table[] = {
 	{ MP_OBJ_NEW_QSTR(MP_QSTR___name__), 	MP_ROM_QSTR(MP_QSTR_net) 					},
+	{ MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_net_deinit_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_csqQueryPoll), 	MP_ROM_PTR(&qpy_net_get_csq_obj) 			},
 	{ MP_ROM_QSTR(MP_QSTR_getState), 		MP_ROM_PTR(&qpy_net_get_reg_status_obj) 	},
 	{ MP_ROM_QSTR(MP_QSTR_getConfig), 		MP_ROM_PTR(&qpy_net_get_configuration_obj) 	},
@@ -847,8 +923,11 @@ STATIC const mp_rom_map_elem_t net_module_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_getMcc), 			MP_ROM_PTR(&qpy_net_get_mcc_obj) 			},
 	{ MP_ROM_QSTR(MP_QSTR_setModemFun), 	MP_ROM_PTR(&qpy_net_set_modem_fun_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_getModemFun), 	MP_ROM_PTR(&qpy_net_get_modem_fun_obj) 		},
+#if !defined (PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_setCallback), 	MP_ROM_PTR(&qpy_net_add_event_handler_obj) 	},
-
+#endif
+    { MP_ROM_QSTR(MP_QSTR_setApn), 	MP_ROM_PTR(&qpy_net_set_apn_obj) 	},
+    { MP_ROM_QSTR(MP_QSTR_getApn), 	MP_ROM_PTR(&qpy_net_get_apn_obj) 	},
 };
 
 STATIC MP_DEFINE_CONST_DICT(net_module_globals, net_module_globals_table);

@@ -19,12 +19,13 @@
 #include "runtime.h"
 #include "timeutils.h"
 #include "utime_mphal.h"
+#if !defined(PLAT_Qualcomm)
 #include "sockets.h"
+#endif
 #include "helios_debug.h"
 #include "helios_rtc.h"
 
 #define QPY_UTIME_LOG(msg, ...)      custom_log(Utime, msg, ##__VA_ARGS__)
-
 
 STATIC mp_obj_t time_localtime(size_t n_args, const mp_obj_t *args) {
     timeutils_struct_time_t tm;
@@ -179,13 +180,14 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(time_get_timezone_obj, time_get_timezone);
 
 STATIC const mp_rom_map_elem_t time_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_utime) },
-
     { MP_ROM_QSTR(MP_QSTR_localtime), MP_ROM_PTR(&time_localtime_obj) },
     { MP_ROM_QSTR(MP_QSTR_mktime), MP_ROM_PTR(&time_mktime_obj) },
     { MP_ROM_QSTR(MP_QSTR_time), MP_ROM_PTR(&time_time_obj) },
+    
     { MP_ROM_QSTR(MP_QSTR_sleep), MP_ROM_PTR(&mp_utime_sleep_obj) },
     { MP_ROM_QSTR(MP_QSTR_sleep_ms), MP_ROM_PTR(&mp_utime_sleep_ms_obj) },
     { MP_ROM_QSTR(MP_QSTR_sleep_us), MP_ROM_PTR(&mp_utime_sleep_us_obj) },
+
     { MP_ROM_QSTR(MP_QSTR_ticks_ms), MP_ROM_PTR(&mp_utime_ticks_ms_obj) },
     { MP_ROM_QSTR(MP_QSTR_ticks_us), MP_ROM_PTR(&mp_utime_ticks_us_obj) },
     { MP_ROM_QSTR(MP_QSTR_ticks_cpu), MP_ROM_PTR(&mp_utime_ticks_cpu_obj) },

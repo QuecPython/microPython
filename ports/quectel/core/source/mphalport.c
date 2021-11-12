@@ -37,28 +37,88 @@
 #include "helios_os.h"
 #include "helios_rtc.h"
 
+
 STATIC uint8_t stdin_ringbuf_array[256];
 ringbuf_t stdin_ringbuf = {stdin_ringbuf_array, sizeof(stdin_ringbuf_array), 0, 0};
 
 //static Helios_Sem_t mp_hal_stdin_sem = 0;
 #if !defined(PLAT_RDA)
-#define QUECPYTHON_CALLBACK_MSG_MAX_NUM 50
+#define QUECPYTHON_CALLBACK_MSG_MAX_NUM (2 * MICROPY_SCHEDULER_DEPTH)
 static Helios_MsgQ_t quecpython_callback_deal_queue = 0;
 #endif
 
 //forrest.liu@20210809 add for quecpython task repl using waiting msg
-#define MP_HAL_STDIN_MSG_MAX_NUM 50
+#define MP_HAL_STDIN_MSG_MAX_NUM (2 * MICROPY_SCHEDULER_DEPTH)
 static Helios_MsgQ_t mp_hal_stdin_msg = 0;
 void mp_hal_stdin_send_msg_to_rx_chr(void);
 
+static void mp_hal_stdin_cb(uint64_t ind_type, Helios_UARTNum port, uint64_t size);
+
+
+
+static uint8_t mp_hal_cdcPort_State = 1;
+void mp_hal_port_open(uint8_t state)
+{
+	mp_hal_cdcPort_State = state;
+	Helios_UARTConfig UARTConfig = {
+        HELIOS_UART_BAUD,
+        HELIOS_UART_DATABIT_8,
+        HELIOS_UART_STOP_1,
+        HELIOS_UART_PARITY_NONE,
+        HELIOS_UART_FC_NONE
+    };
+	Helios_UARTInitStruct UARTInitStruct = {&UARTConfig, mp_hal_stdin_cb};
+	
+	if(state == 1) {
+		Helios_UART_Deinit(QPY_REPL_UART);
+		if (Helios_UART_Init(QPY_REPL_UART, &UARTInitStruct)) {
+			mp_hal_cdcPort_State = 0;
+	    }
+	}
+}
+
+#define MP_HAL_PORT_CHECK_OPEN (mp_hal_cdcPort_State == 1)
+void mp_keyboard_interrupt(void);
 static void mp_hal_stdin_cb(uint64_t ind_type, Helios_UARTNum port, uint64_t size)
 {
     UNUSED(ind_type);
-    UNUSED(size);
     UNUSED(port);
-	
-    //Helios_Semaphore_Release(mp_hal_stdin_sem);
-    mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
+	if(MP_HAL_PORT_CHECK_OPEN) {
+#if MICROPY_KBD_EXCEPTION
+	    if(IS_MAINPY_RUNNING_FLAG_TRUE())
+	    {
+	        uint64_t i = 0;
+	        volatile unsigned char c = 0;
+	        for(i= 0; i < size; i++)
+	        {
+	            if(Helios_UART_Read(QPY_REPL_UART, (void *)&c, sizeof(unsigned char)) >0 ) {
+        			if (!IS_REPL_REFUSED() && (c == mp_interrupt_char)) {
+                        // Signal keyboard interrupt to be raised as soon as the VM resumes
+                        mp_keyboard_interrupt();
+                        break;
+                    }
+                    continue;
+        		}
+        		break;
+            }
+            if(i < size)
+            {
+                for(; i < size; i++)
+                {
+                    if(Helios_UART_Read(QPY_REPL_UART, (void *)&c, sizeof(unsigned char)) >0 ) {
+                        continue;
+        		    }
+        		    break;
+                }
+            }
+        }
+        else
+#endif
+        {
+    	    //Helios_Semaphore_Release(mp_hal_stdin_sem);
+    	    mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
+        }
+	}
 }
 
 int mp_hal_stdio_init(void)
@@ -95,12 +155,13 @@ int mp_hal_stdin_rx_chr(void)
 {
     while(1)
     {
-    	unsigned char c = 0;
+    	volatile unsigned char c = 0;
 		mp_uint_t msg;
-		
-        int ret = (int)Helios_UART_Read(QPY_REPL_UART, (void *)&c, sizeof(unsigned char));
-        if(ret > 0) return c;
 
+		if(MP_HAL_PORT_CHECK_OPEN && Helios_UART_Read(QPY_REPL_UART, (void *)&c, sizeof(unsigned char)) >0 ) {
+			return c;
+		}
+		
         //Helios_Semaphore_Acquire(mp_hal_stdin_sem, 10);
         //forrest.liu@20210809 add for quecpython task repl using waiting msg
         MP_THREAD_GIL_EXIT();
@@ -113,20 +174,22 @@ int mp_hal_stdin_rx_chr(void)
 void mp_hal_stdout_tx_strn(const char *str, size_t len)
 {
 	if (!str|| !len) return;
-    
-    Helios_UART_Write(QPY_REPL_UART, (void *)str, len);
+    if(MP_HAL_PORT_CHECK_OPEN) {
+    	Helios_UART_Write(QPY_REPL_UART, (void *)str, len);
+    }
 }
 
-uint32_t mp_hal_ticks_ms(void) {
-	return (uint32_t)(Helios_RTC_GetTicks()/HAL_TICK1S);
+uint32_t mp_hal_ticks_ms(void) 
+{
+	return (uint32_t)Helios_RTC_TicksToMs();
 }
 
 uint32_t mp_hal_ticks_us(void) {
-    return (uint32_t)(Helios_RTC_GetTicks()*1000/HAL_TICK1S);
+    return (uint32_t)Helios_RTC_TicksToUs();
 }
 
 void mp_hal_delay_ms(uint32_t ms) {
-#if !defined(PLAT_RDA)
+#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
 	mp_uint_t dt = 0;
 	mp_uint_t t0 = 0,t1 = 0;
 	Helios_Thread_t taskid = 0;
@@ -187,7 +250,7 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
     return ret;
 }
 
-#if !defined(PLAT_RDA)
+#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
 void quecpython_callback_deal_queue_create(void)
 {
 	quecpython_callback_deal_queue = Helios_MsgQ_Create(QUECPYTHON_CALLBACK_MSG_MAX_NUM, sizeof(mp_uint_t));

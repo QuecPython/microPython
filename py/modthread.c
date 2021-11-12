@@ -55,7 +55,7 @@ typedef struct _mp_obj_thread_lock_t {
 } mp_obj_thread_lock_t;
 
 STATIC mp_obj_thread_lock_t *mp_obj_new_thread_lock(void) {
-    mp_obj_thread_lock_t *self = m_new_obj(mp_obj_thread_lock_t);
+    mp_obj_thread_lock_t *self = m_new_obj_with_finaliser(mp_obj_thread_lock_t);
     self->base.type = &mp_type_thread_lock;
     mp_thread_mutex_init(&self->mutex);
     self->locked = false;
@@ -108,7 +108,26 @@ STATIC mp_obj_t thread_lock___exit__(size_t n_args, const mp_obj_t *args) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(thread_lock___exit___obj, 4, 4, thread_lock___exit__);
 
+//Added by Freddy@20210818 Allows an application to delete a lock, or the lock is deleted when GC reclaims resources
+STATIC mp_obj_t mod_thread_delete_lock(mp_obj_t args_in) {
+    const mp_obj_type_t *type = mp_obj_get_type(args_in);
+    if(type->name != MP_QSTR_lock)
+    {
+        mp_raise_msg(&mp_type_TypeError, MP_ERROR_TEXT("The argument isn't a lock."));
+    }
+
+    mp_obj_thread_lock_t *lock = MP_OBJ_TO_PTR(args_in);
+    if((mp_thread_mutex_t)NULL != lock->mutex) {
+        mp_thread_mutex_del(&lock->mutex);
+        lock->locked = false;
+        lock->mutex = (mp_thread_mutex_t)NULL;
+    }
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(mod_thread_delete_lock_obj, mod_thread_delete_lock);
+
 STATIC const mp_rom_map_elem_t thread_lock_locals_dict_table[] = {
+    { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mod_thread_delete_lock_obj) },
     { MP_ROM_QSTR(MP_QSTR_acquire), MP_ROM_PTR(&thread_lock_acquire_obj) },
     { MP_ROM_QSTR(MP_QSTR_release), MP_ROM_PTR(&thread_lock_release_obj) },
     { MP_ROM_QSTR(MP_QSTR_locked), MP_ROM_PTR(&thread_lock_locked_obj) },
@@ -137,6 +156,10 @@ STATIC mp_obj_t mod_thread_stack_size(size_t n_args, const mp_obj_t *args) {
     if (n_args != 0) 
 	{
 		int stack_size = mp_obj_get_int(args[0]);
+		if (stack_size < 0)
+		{
+			return mp_obj_new_int(-1);
+		}
 		if((stack_size * sizeof(uint32_t)) < MP_THREAD_MIN_STACK_SIZE)
 		{
 			return mp_obj_new_int(-1);
@@ -271,7 +294,7 @@ STATIC mp_obj_t mod_thread_start_new_thread(size_t n_args, const mp_obj_t *args)
     // spawn the thread!
     int thread_id = mp_thread_create(thread_entry, th_args, &th_args->stack_size);
 
-    return mp_obj_new_int(thread_id);
+    return mp_obj_new_int_from_uint((unsigned int)thread_id);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_thread_start_new_thread_obj, 2, 3, mod_thread_start_new_thread);
 
@@ -298,7 +321,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(mod_thread_get_heap_size_obj, mod_thread_get_he
 STATIC mp_obj_t mod_thread_stop_thread(mp_obj_t thread_id)
 {
 	Helios_Thread_t curr_id = Helios_Thread_GetID(); 
-    int th_id = mp_obj_get_int(thread_id);
+    int th_id = (int)mp_obj_get_int_truncated(thread_id);
     
     extern Helios_Thread_t ql_micropython_task_ref;
 	
@@ -348,6 +371,7 @@ STATIC const mp_rom_map_elem_t mp_module_thread_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_start_new_thread), MP_ROM_PTR(&mod_thread_start_new_thread_obj) },
     { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mod_thread_exit_obj) },
     { MP_ROM_QSTR(MP_QSTR_allocate_lock), MP_ROM_PTR(&mod_thread_allocate_lock_obj) },
+    { MP_ROM_QSTR(MP_QSTR_delete_lock), MP_ROM_PTR(&mod_thread_delete_lock_obj) },
     { MP_ROM_QSTR(MP_QSTR_get_heap_size), MP_ROM_PTR(&mod_thread_get_heap_size_obj) },
     { MP_ROM_QSTR(MP_QSTR_stop_thread), MP_ROM_PTR(&mod_thread_stop_thread_obj) },
 };

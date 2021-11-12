@@ -841,7 +841,7 @@ static qbool ttlv_dict_handle(const void *ttlv_head, quint32_t count, mp_obj_t n
 ** 	@param : 
 ** 	@retval: 
 ***************************************************************************/
-static mp_obj_t g_event_urc_cb = NULL;
+static c_callback_t *g_event_urc_cb = NULL;
 static void FUNCTION_ATTR_ROM Ql_iotEventCB(quint32_t event, qint32_t errcode, const void *valueT, quint32_t valLen)
 {
     printf("\r\n******* event:%d,%d,%p *******\r\n", event, errcode, valueT);
@@ -855,7 +855,7 @@ static void FUNCTION_ATTR_ROM Ql_iotEventCB(quint32_t event, qint32_t errcode, c
 			{
 				mp_obj_new_int_from_uint(event),
 				mp_obj_new_int_from_uint(errcode)};
-		mp_sched_schedule(g_event_urc_cb, mp_obj_new_tuple(2, tuple));
+		mp_sched_schedule_ex(g_event_urc_cb, mp_obj_new_tuple(2, tuple));
 	}
 	else if (QIOT_ATEVENT_TYPE_RECV == event && QIOT_RECV_SUCC_PHYMODEL_RECV == errcode)
 	{
@@ -868,7 +868,7 @@ static void FUNCTION_ATTR_ROM Ql_iotEventCB(quint32_t event, qint32_t errcode, c
 					mp_obj_new_int_from_uint(event),
 					mp_obj_new_int_from_uint(errcode),
 					node_dict};
-			mp_sched_schedule(g_event_urc_cb, mp_obj_new_tuple(3, tuple));
+			mp_sched_schedule_ex(g_event_urc_cb, mp_obj_new_tuple(3, tuple));
 		}
 	}
 	else if(QIOT_ATEVENT_TYPE_RECV == event && QIOT_RECV_SUCC_PHYMODEL_REQ == errcode)
@@ -889,7 +889,7 @@ static void FUNCTION_ATTR_ROM Ql_iotEventCB(quint32_t event, qint32_t errcode, c
 				mp_obj_new_int_from_uint(event),
 				mp_obj_new_int_from_uint(errcode),
 				req_list};
-		mp_sched_schedule(g_event_urc_cb, mp_obj_new_tuple(3, tuple));
+		mp_sched_schedule_ex(g_event_urc_cb, mp_obj_new_tuple(3, tuple));
 	}
 	else
 	{
@@ -898,7 +898,7 @@ static void FUNCTION_ATTR_ROM Ql_iotEventCB(quint32_t event, qint32_t errcode, c
 				mp_obj_new_int_from_uint(event),
 				mp_obj_new_int_from_uint(errcode),
 				mp_obj_new_bytes(valueT, valLen)};
-		mp_sched_schedule(g_event_urc_cb, mp_obj_new_tuple(3, tuple));
+		mp_sched_schedule_ex(g_event_urc_cb, mp_obj_new_tuple(3, tuple));
 	}
 }
 /**************************************************************************
@@ -912,7 +912,11 @@ STATIC mp_obj_t qpy_Ql_iotConfigSetEventCB(mp_obj_t event_urc_cb)
 	{
 		return mp_obj_new_bool(FALSE);
 	}
-	g_event_urc_cb = event_urc_cb;
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_event_urc_cb = &cb;
+	mp_sched_schedule_callback_register(g_event_urc_cb, event_urc_cb);
+	
 	Ql_iotConfigSetEventCB(Ql_iotEventCB);
     return mp_obj_new_bool(TRUE);
 }
@@ -1083,8 +1087,18 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_Ql_iotCmdBusLocReport_obj, qpy_Ql_iotCmdBus
 ** 	@param : 
 ** 	@retval: 
 ***************************************************************************/
+STATIC mp_obj_t qpy_module_quecIot_deinit(void)
+{
+    g_event_urc_cb = NULL;
+    Ql_iotConfigSetConnmode(0);
+	return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_quecIot_deinit_obj, qpy_module_quecIot_deinit);
+
+
 STATIC const mp_rom_map_elem_t mp_module_quecIot_globals_table[] = {
 	{MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_quecIot)},
+	{MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_quecIot_deinit_obj) },
 	{MP_ROM_QSTR(MP_QSTR_passTransSend), MP_ROM_PTR(&qpy_Ql_iotCmdBusPassTransSend_obj)},
 	{MP_ROM_QSTR(MP_QSTR_phymodelReport), MP_ROM_PTR(&qpy_Ql_iotCmdBusPhymodelReport_obj)},
 	{MP_ROM_QSTR(MP_QSTR_phymodelAck), MP_ROM_PTR(&qpy_Ql_iotCmdBusPhymodelAck_obj)},

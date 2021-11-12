@@ -30,7 +30,10 @@
 #include "mperrno.h"
 #include "obj.h"
 #include "helios_os.h"
+#include "helios_debug.h"
 
+
+#define HELIOS_OSTIMER_LOG(msg, ...)      custom_log("osTimer", msg, ##__VA_ARGS__)
 
 
 typedef struct _mod_ostimer_obj_t 
@@ -39,16 +42,16 @@ typedef struct _mod_ostimer_obj_t
 	Helios_OSTimer_t handle;     			    /* OS supplied timer reference             			*/
 	unsigned int initialTime;   			 		/* initial expiration time in ms           			*/
 	bool cyclicalEn;				     	/* wether to enable the cyclical mode or not		*/
-	mp_obj_t callback;  		/* timer call-back routine     						*/
+	c_callback_t callback;  		/* timer call-back routine     						*/
 	bool deleteFlagh;
 } mod_ostimer_obj_t;
 
 const mp_obj_type_t mp_ostimer_type;
 
-STATIC void mod_ostimer_isr(void *self_in) {
-    mod_ostimer_obj_t *self = (mod_ostimer_obj_t *)self_in;
-	if(mp_obj_is_callable(self->callback)){
-    	mp_sched_schedule(self->callback, self);
+STATIC void mod_ostimer_isr(void *cb) {
+    c_callback_t *callback = (c_callback_t *)cb;
+	if(NULL != callback){
+    	mp_sched_schedule_ex(callback, mp_const_none);
 	}
     // mp_hal_wake_main_task_from_isr();
 }
@@ -72,19 +75,27 @@ STATIC mp_obj_t mod_ostimer_start(uint n_args, const mp_obj_t *args)
 	
 	mod_ostimer_obj_t *self = MP_OBJ_TO_PTR(args[0]);
 
-	self->initialTime = mp_obj_get_int(args[1]);
+    if (!(self->deleteFlagh))
+    {
+    	self->initialTime = mp_obj_get_int(args[1]);
 
-	self->cyclicalEn = !!mp_obj_get_int(args[2]);
+    	self->cyclicalEn = !!mp_obj_get_int(args[2]);
 
-	self->callback = args[3];
+    	//self->callback = args[3];
+    	mp_sched_schedule_callback_register(&self->callback, args[3]);
 
-    Helios_OSTimerAttr OSTimerAttr = {
-        .ms = (uint32_t)self->initialTime,
-        .cycle_enable = self->cyclicalEn,
-        .cb = mod_ostimer_isr,
-        .argv = (void *)self
-    };
-    ret = Helios_OSTimer_Start(self->handle, &OSTimerAttr);
+        Helios_OSTimerAttr OSTimerAttr = {
+            .ms = (uint32_t)self->initialTime,
+            .cycle_enable = self->cyclicalEn,
+            .cb = mod_ostimer_isr,
+            .argv = (void *)&self->callback
+        };
+        ret = Helios_OSTimer_Start(self->handle, &OSTimerAttr);
+    }
+    else
+    {
+        ret = -1;
+    }
 	return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mod_ostimer_start_obj, 3, 5, mod_ostimer_start);
@@ -96,8 +107,14 @@ STATIC mp_obj_t mod_ostimer_stop(mp_obj_t arg0)
 	int ret = 0;
 	
 	mod_ostimer_obj_t *self = MP_OBJ_TO_PTR(arg0);
-
-	ret = Helios_OSTimer_Stop(self->handle);
+    if (!(self->deleteFlagh))
+    {
+	    ret = Helios_OSTimer_Stop(self->handle);
+	}
+	else
+	{
+        ret = -1;
+	}
 	return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(mod_ostimer_stop_obj, mod_ostimer_stop);
@@ -114,6 +131,7 @@ STATIC mp_obj_t mod_ostimer_delete(mp_obj_t arg0)
 	{
 		self->deleteFlagh = 1;
         Helios_OSTimer_Delete(self->handle);
+        HELIOS_OSTIMER_LOG("[osTimer] ostimer delete\r\n");
 	}
 
 	return mp_obj_new_int(ret);
@@ -123,6 +141,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(mod_ostimer_delete_obj, mod_ostimer_delete);
 
 STATIC const mp_rom_map_elem_t mod_ostimer_locals_dict_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_osTimer) },
+	{ MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mod_ostimer_delete_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_start), MP_ROM_PTR(&mod_ostimer_start_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_stop), MP_ROM_PTR(&mod_ostimer_stop_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_delete_timer), MP_ROM_PTR(&mod_ostimer_delete_obj) },

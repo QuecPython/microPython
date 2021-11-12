@@ -22,7 +22,9 @@
 #include "gc.h"
 #include "mphal.h"
 #include "mperrno.h"
-//#include "machine_spi.h"
+
+#include "mphalport.h"
+
 
 #include "helios_spi.h"
 
@@ -68,13 +70,22 @@ mp_obj_t machine_hard_spi_make_new(const mp_obj_type_t *type, size_t n_args, siz
 	if ( mode > 3) {
        mp_raise_ValueError("mode must be (0~3)");
     }
-	
-	if (clk > 6) {
-       mp_raise_ValueError("clk must be (0~6)");
+
+#if defined(PLAT_Unisoc)	
+	if (clk > 9) {
+       mp_raise_ValueError("clk must be (0~9)");
     }
+#elif defined(PLAT_RDA)
+	if (clk > 39) {
+       mp_raise_ValueError("clk must be (0~39)");
+    }
+#else
+	if (clk > 6) {
+	   mp_raise_ValueError("clk must be (0~6)");
+	}
+#endif
 
 
-   
     machine_hard_spi_obj_t *self = m_new_obj(machine_hard_spi_obj_t);
 
     self->base.type = &machine_hard_spi_type;
@@ -83,6 +94,9 @@ mp_obj_t machine_hard_spi_make_new(const mp_obj_type_t *type, size_t n_args, siz
 	self->clk = clk;
 	
 	ret = Helios_SPI_Init((Helios_SPINum) self->port, (Helios_SPIMode) self->mode, (uint32_t) self->clk);
+	if(ret != 0) {
+		mp_raise_ValueError("spi init fail");
+	}
 	
     HELIOS_SPI_LOG("Helios_SPI_Init %d\r\n",ret);
     return MP_OBJ_FROM_PTR(self);
@@ -177,7 +191,9 @@ STATIC const mp_rom_map_elem_t machine_spi_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&machine_spi_write_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_write_read), MP_ROM_PTR(&machine_spi_write_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_SPI0), MP_ROM_INT(HELIOS_SPI0) },
+#if !defined(PLAT_RDA)
     { MP_ROM_QSTR(MP_QSTR_SPI1), MP_ROM_INT(HELIOS_SPI1) },
+#endif
 };
 
 MP_DEFINE_CONST_DICT(mp_machine_hard_spi_locals_dict, machine_spi_locals_dict_table);

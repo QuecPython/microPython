@@ -33,6 +33,7 @@
 #include "mphal.h"
 #include "readline.h"
 #include "mpprint.h"
+#include "objmodule.h"
 
 #if !defined(PLAT_RDA)
 #if CONFIG_MBEDTLS
@@ -105,17 +106,26 @@ void _start(void) {main(0, NULL);}
 */
 static char *stack_top;
 #if MICROPY_ENABLE_GC
+#if defined(PLAT_Qualcomm)
+static char heap[650 * 1024];
+#else
 static char heap[1024 * 512];
 #endif
+#endif
 extern pyexec_mode_kind_t pyexec_mode_kind;
+extern void machine_timer_deinit_all(void);
+
+MAINPY_RUNNING_FLAG_DEF
+MAINPY_INTERRUPT_BY_KBD_FLAG_DEF
+
 void quecpython_task(void *arg)
 {
 	Helios_Thread_t id = 0;
 	void *stack_ptr = NULL;
 	int stack_dummy;
 
-#if !defined(PLAT_RDA)
-    //Added by Freddy @20210520 在线程sleep时，通过wait queue的方式超时代替实际的sleep，
+#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
+    //Added by Freddy @20210520 在线程sleep时，通过wait queue的方式超时代替实际的sleep,
     //当有callback执行时，给此queue发消息即可快速执行callback
     void quecpython_callback_deal_queue_create(void);
     quecpython_callback_deal_queue_create();
@@ -134,9 +144,9 @@ void quecpython_task(void *arg)
 	mp_thread_init(stack_ptr, MP_TASK_STACK_LEN);
 	//uart_printf("===========id: 0x%4X, stack_ptr: 0x%08X==========\r\n", id, stack_ptr);
 	#endif
-	
+
 	if(mp_hal_stdio_init()) return;
-	
+
     /*
 	** Jayceon-2020/09/23:
 	** Resolve all sorts of weird bugs that occur using the quecpython.py tool.
@@ -159,32 +169,53 @@ soft_reset:
 //  mp_obj_list_append(mp_sys_path, MP_OBJ_NEW_QSTR(MP_QSTR__slash_lib));
     mp_obj_list_init(mp_sys_argv, 0);
     readline_init0();
-    
+	
 	// run boot-up scripts
 #if defined(PLAT_RDA)
     pyexec_frozen_module("_boot_RDA.py");
+#elif defined(PLAT_Qualcomm)
+	pyexec_frozen_module("_boot_Qualcomm.py");
 #else
     pyexec_frozen_module("_boot.py");
 #endif
-    if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL) {
-        pyexec_file_if_exists("/usr/main.py");
+    if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL && MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE()) {
+        MAINPY_RUNNING_FLAG_SET();
+        int ret = pyexec_file_if_exists("/usr/main.py");
+        MAINPY_RUNNING_FLAG_CLEAR();
+        if(RET_KBD_INTERRUPT == ret)
+        {
+            MAINPY_INTERRUPT_BY_KBD_FLAG_SET();
+        }
     }
-	for (;;) {
-        if (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) {
-            if (pyexec_raw_repl() != 0) {
-                break;
-            }
-        } else {
-            if (pyexec_friendly_repl() != 0) {
-                break;
+    else
+    {
+        MAINPY_INTERRUPT_BY_KBD_FLAG_CLEAR();
+    }
+
+    if(MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE())
+    {
+    	for (;;) {
+            if (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) {
+                if (pyexec_raw_repl() != 0) {
+                    break;
+                }
+            } else {
+                if (pyexec_friendly_repl() != 0) {
+                    break;
+                }
             }
         }
     }
-	//machine_timer_deinit_all();
+    
+    machine_timer_deinit_all();
+
 	#if MICROPY_PY_THREAD
 	//uart_printf("mp_thread_deinit in quecpython task.\r\n");
     mp_thread_deinit();
     #endif
+
+    mp_module_deinit_all();
+
 	gc_sweep_all();
 
     mp_hal_stdout_tx_str("MPY: soft reboot\r\n");

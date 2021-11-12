@@ -33,6 +33,7 @@
 #include "py/objmodule.h"
 #include "py/runtime.h"
 #include "py/builtin.h"
+#include "mphalport.h"
 
 #include "genhdr/moduledefs.h"
 
@@ -281,6 +282,27 @@ mp_obj_t mp_module_search_umodule(const char *module_str) {
     return MP_OBJ_NULL;
 }
 #endif
+
+//When the VM restarts, find all builtin modules that contain the qpy_module_deinit method and execute it.
+void mp_module_deinit_all(void)
+{
+    mp_obj_t dest[2];
+    nlr_buf_t nlr;
+    if (nlr_push(&nlr) == 0) {
+        for(size_t i = 0;i < MP_ARRAY_SIZE(mp_builtin_module_table); i++)
+        {
+            mp_load_method_maybe(MP_OBJ_FROM_PTR(mp_builtin_module_table[i].value), MP_QSTR___qpy_module_deinit__, dest);
+            if (dest[0] != MP_OBJ_NULL) {
+                mp_call_function_0(dest[0]);
+            }
+        }
+        nlr_pop();
+    } else {
+        mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
+        mp_printf(&mp_plat_print, "MPY: Modules deinit fail\r\n");
+    }
+
+}
 
 #if MICROPY_MODULE_BUILTIN_INIT
 void mp_module_call_init(qstr module_name, mp_obj_t module_obj) {

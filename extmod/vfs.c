@@ -374,23 +374,7 @@ MP_DEFINE_CONST_FUN_OBJ_KW(mp_vfs_open_obj, 0, mp_vfs_open);
 
 mp_obj_t mp_vfs_chdir(mp_obj_t path_in) {
     mp_obj_t path_out;
-	// Pawn -2021-03-18 : Fixed file path error returns error message
-	const char *path = mp_obj_str_get_str(path_in);
-	if ( path[0] == '/' )
-	{
-		if ( strncmp(path, "/usr/", 5) != 0)
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	else
-	{
-		if ( strncmp(path, "usr/", 4) != 0)
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	// Pawn -2021-03-18 : Fixed file path error returns error message
+
     mp_vfs_mount_t *vfs = lookup_path(path_in, &path_out);
     if (vfs == MP_VFS_ROOT) {
         // If we change to the root dir and a VFS is mounted at the root then
@@ -513,23 +497,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_vfs_listdir_obj, 0, 1, mp_vfs_listdir);
 
 mp_obj_t mp_vfs_mkdir(mp_obj_t path_in) {
     mp_obj_t path_out;
-	// Pawn -2021-03-18 : Fixed file path error returns error message
-	const char *path = mp_obj_str_get_str(path_in);
-	if ( path[0] == '/' )
-	{
-		if ( strncmp(path, "/usr/", 5) != 0)
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	else
-	{
-		if ( strncmp(path, "usr/", 4) != 0)
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	// Pawn -2021-03-18 : Fixed file path error returns error message
+
 	mp_vfs_mount_t *vfs = lookup_path(path_in, &path_out);
     if (vfs == MP_VFS_ROOT || (vfs != MP_VFS_NONE && !strcmp(mp_obj_str_get_str(path_out), "/"))) {
         mp_raise_OSError(MP_EEXIST);
@@ -550,21 +518,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_mkdir_obj, mp_vfs_mkdir);
 mp_obj_t mp_vfs_remove(mp_obj_t path_in) {
     mp_obj_t path_out;
 	const char *path = mp_obj_str_get_str(path_in);
-	// Pawn -2021-03-18 : Fixed file path error returns error message	
-	if ( path[0] == '/' )
-	{
-		if ( strncmp(path, "/usr/", 5) != 0)
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	else
-	{
-		if ( strncmp(path, "usr/", 4) != 0)
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}	
+
     mp_vfs_mount_t *vfs = lookup_path(path_in, &path_out);
 	
 	//Kenney.wang 20201228 vfs readonly 
@@ -581,24 +535,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_vfs_remove_obj, mp_vfs_remove);
 
 mp_obj_t mp_vfs_rename(mp_obj_t old_path_in, mp_obj_t new_path_in) {
     mp_obj_t args[2];
-	// Pawn -2021-03-18 : Fixed file path error returns error message
-	const char *old_path = mp_obj_str_get_str(old_path_in);
-	const char *new_path = mp_obj_str_get_str(new_path_in);
-	if ( (old_path[0] == '/') && (new_path[0] == '/') )
-	{
-		if ( (strncmp(old_path, "/usr/", 5) != 0) && (strncmp(new_path, "/usr/", 5) != 0))
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	else
-	{
-		if ( (strncmp(old_path, "usr/", 4) != 0) && (strncmp(new_path, "usr/", 4) != 0))
-		{
-			mp_raise_msg_varg(&mp_type_OSError, "File path error, Use an absolute path('/usr/xxx')");
-		}
-	}
-	// Pawn -2021-03-18 : Fixed file path error returns error message
+
     mp_vfs_mount_t *old_vfs = lookup_path(old_path_in, &args[0]);
     mp_vfs_mount_t *new_vfs = lookup_path(new_path_in, &args[1]);
     if (old_vfs != new_vfs) {

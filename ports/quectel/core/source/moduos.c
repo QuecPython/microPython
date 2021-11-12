@@ -27,6 +27,7 @@
 #include "extmod/vfs_lfs.h"
 #include "mpversion.h"
 #include "helios_dev.h"
+#include "extmod/vfs_efs.h"
 
 
 static char sysname[20] = {0};
@@ -147,7 +148,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(os_dupterm_notify_obj, os_dupterm_notify);
 
 STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_uos) },
-    { MP_ROM_QSTR(MP_QSTR_uname), MP_ROM_PTR(&os_uname_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_uname), MP_ROM_PTR(&os_uname_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_uname2), MP_ROM_PTR(&os_uname2_obj) },
     { MP_ROM_QSTR(MP_QSTR_urandom), MP_ROM_PTR(&os_urandom_obj) },
     #if MICROPY_PY_OS_DUPTERM
@@ -170,12 +171,17 @@ STATIC const mp_rom_map_elem_t os_module_globals_table[] = {
     #if MICROPY_VFS_FAT
     { MP_ROM_QSTR(MP_QSTR_VfsFat), MP_ROM_PTR(&mp_fat_vfs_type) },
     #endif
+#if !defined(PLAT_Qualcomm)	
     #if MICROPY_VFS_LFS1
     { MP_ROM_QSTR(MP_QSTR_VfsLfs1), MP_ROM_PTR(&mp_type_vfs_lfs1) },
     #endif
     #if MICROPY_VFS_LFS2
     { MP_ROM_QSTR(MP_QSTR_VfsLfs2), MP_ROM_PTR(&mp_type_vfs_lfs2) },
     #endif
+#endif	
+	#if defined(PLAT_Qualcomm)
+	{ MP_ROM_QSTR(MP_QSTR_VfsEfs), MP_ROM_PTR(&mp_type_vfs_efs) },
+	#endif
     #endif
 };
 

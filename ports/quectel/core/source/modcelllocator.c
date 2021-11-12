@@ -97,16 +97,18 @@ STATIC mp_obj_t qpy_lbs_get_cell_coordinates(size_t n_args, const mp_obj_t *args
 	config_info.timeout = timeout;
 	config_info.profile_idx = profile_idx;
 
+    MP_THREAD_GIL_EXIT();
 	ret = Helios_LBS_SetConfiguration(0, &config_info);
+    MP_THREAD_GIL_ENTER();
 	if (ret != 0)
 	{
 		QPY_MODLBS_LOG("para config failed!\r\n");
 		return mp_obj_new_int(-1);
 	}
 
-	MP_THREAD_GIL_EXIT();
+	//MP_THREAD_GIL_EXIT();
 	ret = Helios_LBS_GetPosition(&position);
-	MP_THREAD_GIL_ENTER();
+	//MP_THREAD_GIL_ENTER();
 	if (ret != 0)
 	{
 		return mp_obj_new_int(-6);

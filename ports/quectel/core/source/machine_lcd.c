@@ -101,6 +101,9 @@ STATIC mp_obj_t machine_lcd_brightness(mp_obj_t self_in, mp_obj_t data)
 		return mp_obj_new_int(-1);
 	}
 	ret = Helios_LCD_Brightness(bright_level);
+	if(ret == 1001) {
+		mp_raise_ValueError("The platform does not support LCD backlight adjustment");
+	}
 	return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_lcd_brightness_obj, machine_lcd_brightness);
@@ -327,6 +330,56 @@ STATIC mp_obj_t machine_lcd_make_new(const mp_obj_type_t *type, size_t n_args, s
     return MP_OBJ_FROM_PTR(self_lcd);
 }
 
+enum {
+	FORMAT_BIN,
+	FORMAT_JPEG,
+	FORMAT_JPG,
+	FORMAT_MAX,
+};
+
+
+STATIC int check_format(char *path) {
+	if(path == NULL) return -1;
+	
+	if(strlen(path) < 1) {
+		return -2;
+	}
+	
+	char *st_old = NULL;
+	char *st_now = NULL;
+	
+	int is_first = 1;
+	while(1) {
+		if(is_first == 1) {
+			is_first = 0;
+			st_now = strchr(path, '.');
+		} else {
+			st_now = strchr(st_now+1, '.');
+		}
+		if(st_now != NULL){
+			st_old = st_now+1;
+		} else {
+			break;
+		}
+	}
+	if(st_old == NULL) return -1;
+	
+	if(strncmp(st_old, "bin", 3)==0){
+		return FORMAT_BIN;
+	}  else if(strncmp(st_old, "jpeg", 4)==0) {
+		return FORMAT_JPEG;
+	}else if(strncmp(st_old, "jpg", 3)==0) {
+		return FORMAT_JPG;
+	} else {
+		return -1;
+	}
+}
+
+#define CHECK_IS_JPEG(x) (check_format(x) == FORMAT_JPEG)
+#define CHEKC_IS_BIN(x)	(check_format(x) == FORMAT_BIN)
+#define CHEKC_IS_JPG(x)	(check_format(x) == FORMAT_JPG)
+
+
 static int Helios_lcd_write_data_by_file(char* file_name, unsigned int start_x, unsigned int start_y) {
 	
 	HeliosFILE *fileID = NULL;
@@ -423,10 +476,62 @@ static int Helios_lcd_write_data_by_file_wh(char* file_name, unsigned int start_
 	return ret;
 }
 
+
+
+
+#ifdef CONFIG_JPEG
+STATIC int quec_lcd_show_jpeg(char *file_name, uint32_t start_x, uint32_t start_y){
+	char name[256] = {0};
+	rgb_struct lcd_data = {0};
+	int ret = 0;	
+	uint32_t end_x = 0;
+	uint32_t end_y = 0;
+	
+	sprintf(name, "U:/%s",file_name);
+	ret = JPEG2RGB565(name,&lcd_data);
+	if(ret != 0) {
+		LCD_LOG("JPEG2RGB565 fail ret = %d\n",ret);
+		return (-1);
+	}
+	
+	end_x = start_x + lcd_data.width-1;
+	end_y = start_y + lcd_data.height -1;
+	
+	ret = Helios_LCD_Write(lcd_data.buf, start_x, start_y, end_x, end_y);
+	if(lcd_data.buf) {
+		free(lcd_data.buf);
+	}
+	return ret;
+}
+
+
+STATIC mp_obj_t machine_lcd_show_jpeg(size_t n_args, const mp_obj_t *args)
+{
+	
+	int ret = 0;
+	int start_x = 0;
+	int start_y = 0;
+
+	start_x = mp_obj_get_int(args[2]);
+	start_y = mp_obj_get_int(args[3]);
+
+	//machine_lcd_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+	char *file_name = (char*)mp_obj_str_get_str(args[1]);
+
+	if(!CHECK_IS_JPEG(file_name) && !CHEKC_IS_JPG(file_name)) {
+		mp_raise_ValueError("This kind of picture format is not supported at present");
+	} 
+	
+	ret = quec_lcd_show_jpeg(file_name, start_x, start_y);
+
+    return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_lcd_show_jpeg_obj, 4, 4, machine_lcd_show_jpeg);
+#endif
+
 STATIC mp_obj_t machine_lcd_show_data(size_t n_args, const mp_obj_t *args)
 {
 
-#if 1
 	int ret = 0;
 	int start_x = 0;
 	int start_y = 0;
@@ -436,65 +541,33 @@ STATIC mp_obj_t machine_lcd_show_data(size_t n_args, const mp_obj_t *args)
 	char *file_name = (char*)mp_obj_str_get_str(args[1]);
 	start_x = mp_obj_get_int(args[2]);
 	start_y = mp_obj_get_int(args[3]);
-	if(n_args == 4) {
-		ret = Helios_lcd_write_data_by_file(file_name,start_x,start_y);
-	} else if(n_args == 6) {
-		width = mp_obj_get_int(args[4]);
-		hight = mp_obj_get_int(args[5]);
-		ret = Helios_lcd_write_data_by_file_wh(file_name,start_x,start_y,width,hight);
-	} else {
-		mp_raise_ValueError("wrong number of parameters");
+	if(CHEKC_IS_BIN(file_name)) {
+		if(n_args == 4) {
+			ret = Helios_lcd_write_data_by_file(file_name,start_x,start_y);
+		} else if(n_args == 6) {
+			width = mp_obj_get_int(args[4]);
+			hight = mp_obj_get_int(args[5]);
+			ret = Helios_lcd_write_data_by_file_wh(file_name,start_x,start_y,width,hight);
+		} else {
+			mp_raise_ValueError("wrong number of parameters");
+		}
+	}
+#ifdef CONFIG_JPEG
+	else if(CHECK_IS_JPEG(file_name) || CHEKC_IS_JPG(file_name)) {
+		ret = quec_lcd_show_jpeg(file_name, start_x, start_y);
+	}
+#endif
+	else {
+		mp_raise_ValueError("This kind of picture format is not supported at present");
 	}
 
 	if(ret != 0) {
 		return mp_obj_new_int(-1);
 	}
-#endif
     return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_lcd_show_obj, 4, 6, machine_lcd_show_data);
 
-
-#ifdef CONFIG_JPEG
-STATIC mp_obj_t machine_lcd_show_jpeg(size_t n_args, const mp_obj_t *args)
-{
-	
-	int ret = 0;
-	int start_x = 0;
-	int start_y = 0;
-	int end_x = 0;
-	int end_y = 0;
-
-	start_x = mp_obj_get_int(args[2]);
-	start_y = mp_obj_get_int(args[3]);
-
-	//machine_lcd_obj_t *self = MP_OBJ_TO_PTR(args[0]);
-	char *file_name = (char*)mp_obj_str_get_str(args[1]);
-	
-	char name[256] = {0};
-	sprintf(name, "U:/%s",file_name);
-
-	rgb_struct lcd_data = {0};
-
-	ret = JPEG2RGB565(name,&lcd_data);
-
-	LCD_LOG("JPEG2RGB565 ret = %d\n",ret);
-
-	if(ret != 0) return mp_obj_new_int(ret);
-
-	end_x = start_x + lcd_data.width-1;
-	end_y = start_y + lcd_data.height -1;
-	
-	ret = Helios_LCD_Write(lcd_data.buf, start_x, start_y, end_x, end_y);
-
-	if(lcd_data.buf) {
-		free(lcd_data.buf);
-	}
-	
-    return mp_obj_new_int(ret);
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_lcd_show_jpeg_obj, 4, 4, machine_lcd_show_jpeg);
-#endif
 
 
 STATIC const mp_rom_map_elem_t lcd_locals_dict_table[] = {

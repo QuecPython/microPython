@@ -27,6 +27,36 @@
 #ifndef MICROPY_INCLUDED_LIB_UTILS_INTERRUPT_CHAR_H
 #define MICROPY_INCLUDED_LIB_UTILS_INTERRUPT_CHAR_H
 
+typedef int Helios_Thread_t; 
+extern int mainpy_running_flag;
+extern int mainpy_interrupt_by_kbd_flag;
+extern int repl_protect_enable;
+extern Helios_Thread_t ql_micropython_task_ref;
+
+#define RET_KBD_INTERRUPT (0x00FA00FA)
+
+#define IS_REPL_REFUSED() (1 == repl_protect_enable)
+
+#define MAINPY_RUNNING_FLAG mainpy_running_flag
+#define MAINPY_INTERRUPT_BY_KBD_FLAG mainpy_interrupt_by_kbd_flag
+
+#define MAINPY_RUNNING_FLAG_DEF int MAINPY_RUNNING_FLAG = 0;
+#define MAINPY_INTERRUPT_BY_KBD_FLAG_DEF int MAINPY_INTERRUPT_BY_KBD_FLAG = 0;
+
+#define MAINPY_RUNNING_FLAG_SET() MAINPY_RUNNING_FLAG = 1;
+#define MAINPY_RUNNING_FLAG_CLEAR() MAINPY_RUNNING_FLAG = 0;
+#define IS_MAINPY_RUNNING_FLAG_TRUE() (1 == MAINPY_RUNNING_FLAG)
+#define IS_MAINPY_RUNNING_FLAG_FALSE() (0 == MAINPY_RUNNING_FLAG)
+#define MAINPY_INTERRUPT_BY_KBD_FLAG_SET() MAINPY_INTERRUPT_BY_KBD_FLAG = 1;
+#define MAINPY_INTERRUPT_BY_KBD_FLAG_CLEAR() MAINPY_INTERRUPT_BY_KBD_FLAG = 0;
+#define MAINPY_INTERRUPT_BY_KBD_FLAG_TRUE() (1 == MAINPY_INTERRUPT_BY_KBD_FLAG)
+#define MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE() (0 == MAINPY_INTERRUPT_BY_KBD_FLAG)
+
+#define IS_PYTHON_MAIN_THREAD() (Helios_Thread_GetID() == ql_micropython_task_ref)
+#define IS_OBJ_KBD_INTERRUPT_TYPE() (MP_STATE_VM(mp_pending_exception) == MP_OBJ_FROM_PTR(&MP_STATE_VM(mp_kbd_exception)))
+#define CHECK_MAINPY_KBD_INTERRUPT_ENTER() if(IS_MAINPY_RUNNING_FLAG_FALSE() || !IS_OBJ_KBD_INTERRUPT_TYPE() || IS_PYTHON_MAIN_THREAD()) {
+#define CHECK_MAINPY_KBD_INTERRUPT_EXIT()   }
+
 extern int mp_interrupt_char;
 void mp_hal_set_interrupt_char(int c);
 

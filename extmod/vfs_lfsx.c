@@ -50,11 +50,11 @@
 #define QUEC_QPY_LFS_LOG(msg, ...)
 #endif
 
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 #define LFS_BLOCK_SIZE (1024 * 4)
 #endif
 
-#ifndef QUECTE_PY_LFS1
+#ifndef QUECTEL_PY_LFS1
 STATIC int MP_VFS_LFSx(dev_ioctl)(const struct LFSx_API (config) * c, int cmd, int arg, bool must_return_int) {
     mp_obj_t ret = mp_vfs_blockdev_ioctl(c->context, cmd, arg);
     int ret_i = 0;
@@ -66,7 +66,7 @@ STATIC int MP_VFS_LFSx(dev_ioctl)(const struct LFSx_API (config) * c, int cmd, i
 #endif
 
 STATIC int MP_VFS_LFSx(dev_read)(const struct LFSx_API (config) * c, LFSx_API(block_t) block, LFSx_API(off_t) off, void *buffer, LFSx_API(size_t) size) {
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	unsigned int LfsStartAddress = 0, FlashAddrss = 0;
     LfsStartAddress = ((LFSx_API(flash_info) *)(c->context))->LfsStartAddress;
 
@@ -78,7 +78,7 @@ STATIC int MP_VFS_LFSx(dev_read)(const struct LFSx_API (config) * c, LFSx_API(bl
 }
 
 STATIC int MP_VFS_LFSx(dev_prog)(const struct LFSx_API (config) * c, LFSx_API(block_t) block, LFSx_API(off_t) off, const void *buffer, LFSx_API(size_t) size) {
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	unsigned int LfsStartAddress = 0, FlashAddrss = 0;
     LfsStartAddress = ((LFSx_API(flash_info) *)(c->context))->LfsStartAddress;
 
@@ -90,7 +90,7 @@ STATIC int MP_VFS_LFSx(dev_prog)(const struct LFSx_API (config) * c, LFSx_API(bl
 }
 
 STATIC int MP_VFS_LFSx(dev_erase)(const struct LFSx_API (config) * c, LFSx_API(block_t) block) {
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
     unsigned int LfsStartAddress = 0, FlashAddrss = 0;
     LfsStartAddress = ((LFSx_API(flash_info) *)(c->context))->LfsStartAddress;
 
@@ -102,7 +102,7 @@ STATIC int MP_VFS_LFSx(dev_erase)(const struct LFSx_API (config) * c, LFSx_API(b
 }
 
 STATIC int MP_VFS_LFSx(dev_sync)(const struct LFSx_API (config) * c) {
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	return 0;
 #else
     return MP_VFS_LFSx(dev_ioctl)(c, MP_BLOCKDEV_IOCTL_SYNC, 0, false);
@@ -110,14 +110,14 @@ STATIC int MP_VFS_LFSx(dev_sync)(const struct LFSx_API (config) * c) {
 }
 
 STATIC void MP_VFS_LFSx(init_config)(MP_OBJ_VFS_LFSx * self, mp_obj_t bdev, size_t read_size, size_t prog_size, size_t lookahead) {
-#ifndef QUECTE_PY_LFS1
+#ifndef QUECTEL_PY_LFS1
     self->blockdev.flags = MP_BLOCKDEV_FLAG_FREE_OBJ;
     mp_vfs_blockdev_init(&self->blockdev, bdev);
 #endif
 
     struct LFSx_API (config) * config = &self->config;
     memset(config, 0, sizeof(*config));
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	config->context = &self->info;
 #else
     config->context = &self->blockdev;
@@ -128,7 +128,7 @@ STATIC void MP_VFS_LFSx(init_config)(MP_OBJ_VFS_LFSx * self, mp_obj_t bdev, size
     config->sync = MP_VFS_LFSx(dev_sync);
 
 
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	self->info.FlashType = 0;
 
     HeliosFlashPartiCtx *FlashPartiCtx = Helios_Flash_GetPartiCtx((const char*)self->partition_name);
@@ -157,7 +157,7 @@ STATIC void MP_VFS_LFSx(init_config)(MP_OBJ_VFS_LFSx * self, mp_obj_t bdev, size
 
 
     #if LFS_BUILD_VERSION == 1
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	config->lookahead = 32 * ((config->block_count + 31) / 32);
 #else
     config->lookahead = lookahead;
@@ -195,7 +195,7 @@ STATIC mp_obj_t MP_VFS_LFSx(make_new)(const mp_obj_type_t * type, size_t n_args,
     MP_OBJ_VFS_LFSx *self = m_new0(MP_OBJ_VFS_LFSx, 1);
     self->base.type = type;
 
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	char *src_data = (char *)mp_obj_str_get_str(args[LFS_MAKE_ARG_pname].u_obj);
 	self->partition_name = src_data;
 #endif
@@ -207,7 +207,7 @@ STATIC mp_obj_t MP_VFS_LFSx(make_new)(const mp_obj_type_t * type, size_t n_args,
     self->enable_mtime = args[LFS_MAKE_ARG_mtime].u_bool;
     #endif
 
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
     MP_VFS_LFSx(init_config)(self, NULL,
         args[LFS_MAKE_ARG_readsize].u_int, args[LFS_MAKE_ARG_progsize].u_int, args[LFS_MAKE_ARG_lookahead].u_int);
 #else
@@ -251,7 +251,7 @@ STATIC mp_obj_t MP_VFS_LFSx(mkfs)(size_t n_args, const mp_obj_t *pos_args, mp_ma
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(lfs_make_allowed_args), lfs_make_allowed_args, args);
 
     MP_OBJ_VFS_LFSx self;
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	MP_VFS_LFSx(init_config)(&self, NULL,
         args[LFS_MAKE_ARG_readsize].u_int, args[LFS_MAKE_ARG_progsize].u_int, args[LFS_MAKE_ARG_lookahead].u_int);
 #else
@@ -541,7 +541,7 @@ STATIC mp_obj_t MP_VFS_LFSx(statvfs)(mp_obj_t self_in, mp_obj_t path_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(MP_VFS_LFSx(statvfs_obj), MP_VFS_LFSx(statvfs));
 
 STATIC mp_obj_t MP_VFS_LFSx(mount)(mp_obj_t self_in, mp_obj_t readonly, mp_obj_t mkfs) {
-#ifdef QUECTE_PY_LFS1
+#ifdef QUECTEL_PY_LFS1
 	(void)self_in;
     (void)readonly;
     (void)mkfs;

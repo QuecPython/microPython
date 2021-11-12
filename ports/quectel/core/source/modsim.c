@@ -111,8 +111,9 @@ STATIC mp_obj_t qpy_sim_get_phonenumber(void)
 
 	return mp_obj_new_int(-1);
 }
+#if !defined (PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_phonenumber_obj, qpy_sim_get_phonenumber);
-
+#endif
 
 /*=============================================================================*/
 /* FUNCTION: qpy_sim_enable_pin                                                */
@@ -496,7 +497,10 @@ STATIC mp_obj_t qpy_sim_set_simdet(const mp_obj_t obj_detenable, const mp_obj_t 
 	
 	return mp_obj_new_int(-1);
 }
+
+#if !defined (PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sim_set_simdet_obj, qpy_sim_set_simdet);
+#endif
 
 STATIC mp_obj_t qpy_sim_get_simdet(void)
 {
@@ -517,34 +521,87 @@ STATIC mp_obj_t qpy_sim_get_simdet(void)
 	
 	return mp_obj_new_int(-1);
 }
+#if !defined (PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_simdet_obj, qpy_sim_get_simdet);
-
-static mp_obj_t g_sim_user_callback;
+#endif
+static c_callback_t *g_sim_user_callback;
 
 static void qpy_sim_event_handler(uint8_t sim_id, unsigned int event_id, void *ctx)
 {
 	if(g_sim_user_callback)
 	{
 	    QPY_MODSIM_LOG("[SIM] callback start.\r\n");
-	    mp_sched_schedule(g_sim_user_callback, mp_obj_new_int(event_id));
+	    mp_sched_schedule_ex(g_sim_user_callback, mp_obj_new_int(event_id));
 	    QPY_MODSIM_LOG("[SIM] callback end.\r\n");
 	}
 }
 
 STATIC mp_obj_t qpy_sim_add_event_handler(mp_obj_t handler)
 {
-	g_sim_user_callback = handler;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+    g_sim_user_callback = &cb;
+    mp_sched_schedule_callback_register(g_sim_user_callback, handler);
+
 	Helios_SIM_Add_Event_Handler(qpy_sim_event_handler);
 	
 	return mp_obj_new_int(0);
 }
+#if !defined (PLAT_RDA)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_sim_add_event_handler_obj, qpy_sim_add_event_handler);
+#endif
+
+STATIC mp_obj_t qpy_module_sim_deinit(void)
+{
+	g_sim_user_callback = NULL;
+	Helios_SIM_Add_Event_Handler(NULL);
+	return mp_obj_new_int(0);
+}
+#if !defined (PLAT_RDA)
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_module_sim_deinit_obj, qpy_module_sim_deinit);
+#endif
+
+#if defined (PLAT_ASR)
+STATIC mp_obj_t qpy_sim_genericaccess(const mp_obj_t sim_id, const mp_obj_t cmd)
+{
+	Helios_SIMGenericAccesStruct info = {0};
+    int simid = mp_obj_get_int(sim_id);
+	mp_buffer_info_t bufinfo = {0};
+ 	mp_get_buffer_raise(cmd, &bufinfo, MP_BUFFER_READ);
+
+	if (bufinfo.len <= 0)
+	{
+		mp_raise_ValueError("invalid value, the length of cmd should be more than 0 bytes.");
+	}
+
+    if (simid > 1 || simid < 0)
+    {
+        mp_raise_ValueError("invalid value, simid should be 0 or 1.");
+    }
+
+ 	strncpy((char *)info.cmd, (const char *)bufinfo.buf, bufinfo.len);
+ 	info.len = bufinfo.len;
+	int ret = Helios_SIM_GenericAccess(simid, &info);
+	if (ret == 0)
+	{
+	    mp_obj_t tuple[2] = 
+		{
+			mp_obj_new_int(strlen(info.resp)),
+			mp_obj_new_str(info.resp, strlen(info.resp)),
+		};
+		return mp_obj_new_tuple(2, tuple);
+		//return mp_obj_new_str(info.resp, strlen(info.resp));
+	}
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sim_genericaccess_obj, qpy_sim_genericaccess);
+#endif
 
 STATIC const mp_rom_map_elem_t mp_module_sim_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), 		MP_ROM_QSTR(MP_QSTR_sim) 			},
     { MP_ROM_QSTR(MP_QSTR_getImsi), 		MP_ROM_PTR(&qpy_sim_get_imsi_obj) 		},
 	{ MP_ROM_QSTR(MP_QSTR_getIccid), 		MP_ROM_PTR(&qpy_sim_get_iccid_obj) 		},
-	{ MP_ROM_QSTR(MP_QSTR_getPhoneNumber), 	MP_ROM_PTR(&qpy_sim_get_phonenumber_obj)},
+
 	{ MP_ROM_QSTR(MP_QSTR_verifyPin), 		MP_ROM_PTR(&qpy_sim_verify_pin_obj) 	},
 	{ MP_ROM_QSTR(MP_QSTR_changePin), 		MP_ROM_PTR(&qpy_sim_change_pin_obj) 	},
 	{ MP_ROM_QSTR(MP_QSTR_unblockPin), 		MP_ROM_PTR(&qpy_sim_unblock_pin_obj) 	},
@@ -552,12 +609,17 @@ STATIC const mp_rom_map_elem_t mp_module_sim_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_disablePin), 		MP_ROM_PTR(&qpy_sim_disable_pin_obj) 	},
 	{ MP_ROM_QSTR(MP_QSTR_getStatus), 		MP_ROM_PTR(&qpy_sim_get_card_status_obj)},
 #if defined (PLAT_ASR)
-	{ MP_ROM_QSTR(MP_QSTR_readPhonebook), MP_ROM_PTR(&qpy_sim_read_phonebook_record_obj) },
-	{ MP_ROM_QSTR(MP_QSTR_writePhonebook), MP_ROM_PTR(&qpy_sim_write_phonebook_record_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_readPhonebook),   MP_ROM_PTR(&qpy_sim_read_phonebook_record_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_writePhonebook),  MP_ROM_PTR(&qpy_sim_write_phonebook_record_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_genericAccess),  MP_ROM_PTR(&qpy_sim_genericaccess_obj) },
 #endif
-    { MP_ROM_QSTR(MP_QSTR_setSimDet),      MP_ROM_PTR(&qpy_sim_set_simdet_obj) },
-	{ MP_ROM_QSTR(MP_QSTR_getSimDet),      MP_ROM_PTR(&qpy_sim_get_simdet_obj) },
-	{ MP_ROM_QSTR(MP_QSTR_setCallback),    MP_ROM_PTR(&qpy_sim_add_event_handler_obj) },
+#if !defined (PLAT_RDA)
+    { MP_ROM_QSTR(MP_QSTR_setSimDet),       MP_ROM_PTR(&qpy_sim_set_simdet_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getSimDet),       MP_ROM_PTR(&qpy_sim_get_simdet_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getPhoneNumber), 	MP_ROM_PTR(&qpy_sim_get_phonenumber_obj)},
+	{ MP_ROM_QSTR(MP_QSTR_setCallback),     MP_ROM_PTR(&qpy_sim_add_event_handler_obj) },
+	{ MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_sim_deinit_obj) },
+#endif
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_sim_globals, mp_module_sim_globals_table);
 

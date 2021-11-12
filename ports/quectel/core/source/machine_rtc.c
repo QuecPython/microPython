@@ -26,27 +26,36 @@
 //#include "timeutils.h"
 
 #include "modmachine.h"
-
+#include "helios_debug.h"
 #include "helios_rtc.h"
+
+#define HELIOS_RTC_LOG(fmt, ...) custom_log(machine_rtc, fmt, ##__VA_ARGS__)
+
 
 typedef struct _machine_rtc_obj_t {
     mp_obj_base_t base;
 } machine_rtc_obj_t;
 
-static mp_obj_t callback_cur = NULL;
+static c_callback_t *callback_cur = NULL;
 
 
 // singleton RTC object
-STATIC const machine_rtc_obj_t machine_rtc_obj = {{&machine_rtc_type}};
+//STATIC const machine_rtc_obj_t machine_rtc_obj = {{&machine_rtc_type}};
+STATIC machine_rtc_obj_t *machine_rtc_obj_ptr = NULL;
 
 
 
 STATIC mp_obj_t machine_rtc_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // check arguments
     mp_arg_check_num(n_args, n_kw, 0, 0, false);
-
-    // return constant object
-    return (mp_obj_t)&machine_rtc_obj;
+	if (machine_rtc_obj_ptr != NULL)
+	{
+		// singleton RTC object
+		return MP_OBJ_FROM_PTR(machine_rtc_obj_ptr);
+	}
+	machine_rtc_obj_ptr = m_new_obj_with_finaliser(machine_rtc_obj_t);
+    machine_rtc_obj_ptr->base.type = &machine_rtc_type;
+    return MP_OBJ_FROM_PTR(machine_rtc_obj_ptr);
 }
 
 
@@ -151,14 +160,15 @@ void rtc_callback_to_python(void)
 		return;
 	}
 	
-    if(mp_obj_is_callable(callback_cur)){
-    	mp_sched_schedule(callback_cur, NULL);
-	}
+    mp_sched_schedule_ex(callback_cur, NULL);
 }
 
 STATIC mp_obj_t  machine_rtc_register_callback(mp_obj_t self_in, mp_obj_t callback)
 {
-	callback_cur = callback;
+    static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	callback_cur = &cb;
+	mp_sched_schedule_callback_register(callback_cur, callback);
 
 	int ret = Helios_RTC_Register_cb(rtc_callback_to_python);
 	
@@ -175,8 +185,18 @@ STATIC mp_obj_t machine_rtc_init(mp_obj_t self_in, mp_obj_t date) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(machine_rtc_init_obj, machine_rtc_init);
 
+STATIC mp_obj_t machine_rtc_deinit(mp_obj_t self_in) {
+    HELIOS_RTC_LOG("machine rtc deinit.\r\n");
+    callback_cur = NULL;
+	machine_rtc_obj_ptr = NULL;
+    return mp_obj_new_int(0);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_rtc_deinit_obj, machine_rtc_deinit);
+
+
 STATIC const mp_rom_map_elem_t machine_rtc_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&machine_rtc_init_obj) },
+	{ MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&machine_rtc_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_datetime), MP_ROM_PTR(&machine_rtc_datetime_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_alarm), MP_ROM_PTR(&machine_rtc_set_alarm_obj) },
     { MP_ROM_QSTR(MP_QSTR_enable_alarm), MP_ROM_PTR(&machine_rtc_enable_alarm_obj) },
