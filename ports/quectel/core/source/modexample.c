@@ -120,9 +120,7 @@ STATIC mp_obj_t example_exec(const mp_obj_t arg0)
 		{
 			snprintf(fname, sizeof(fname), "%s", (char *)bufinfo.buf);
 		}
-		MAINPY_RUNNING_FLAG_SET();
 		ret = pyexec_file_if_exists(fname);
-		MAINPY_RUNNING_FLAG_CLEAR();
 	}
 	if ( ret == -1 )
 	{

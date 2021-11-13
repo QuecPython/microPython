@@ -179,9 +179,7 @@ soft_reset:
     pyexec_frozen_module("_boot.py");
 #endif
     if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL && MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE()) {
-        MAINPY_RUNNING_FLAG_SET();
         int ret = pyexec_file_if_exists("/usr/main.py");
-        MAINPY_RUNNING_FLAG_CLEAR();
         if(RET_KBD_INTERRUPT == ret)
         {
             MAINPY_INTERRUPT_BY_KBD_FLAG_SET();
