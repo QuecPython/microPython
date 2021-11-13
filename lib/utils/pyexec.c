@@ -704,8 +704,9 @@ friendly_repl_reset:
                 }
             }
         }
-
+        MAINPY_RUNNING_FLAG_SET();
         ret = parse_compile_execute(&line, parse_input_kind, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR);
+        MAINPY_RUNNING_FLAG_CLEAR();
         if (ret & PYEXEC_FORCED_EXIT) {
             return ret;
         }
@@ -728,7 +729,10 @@ int pyexec_file_if_exists(const char *filename) {
     if (mp_import_stat(filename) != MP_IMPORT_STAT_FILE) {
         return 1; // success (no file is the same as an empty file executing without fail)
     }
-    return pyexec_file(filename);
+    if(IS_PYTHON_MAIN_THREAD()) {MAINPY_RUNNING_FLAG_SET();}
+    int ret = pyexec_file(filename);
+    if(IS_PYTHON_MAIN_THREAD()) {MAINPY_RUNNING_FLAG_CLEAR();}
+    return ret;
 }
 
 #if MICROPY_MODULE_FROZEN

@@ -42,10 +42,15 @@ typedef struct _fota_obj_t {
 }fota_obj_t;
 
 const mp_obj_type_t mp_fota_type;
+static fota_obj_t *fota_self_obj = NULL;
 
 STATIC mp_obj_t fota_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args)
 {
-	fota_obj_t *self = m_new_obj_with_finaliser(fota_obj_t);
+	if (fota_self_obj == NULL)
+    {
+    	fota_self_obj = m_new_obj_with_finaliser(fota_obj_t);
+    }
+	fota_obj_t *self = fota_self_obj;
 	
 	self->base.type = &mp_fota_type;
 	self->ctx = Helios_Fota_Init();
@@ -220,6 +225,7 @@ STATIC mp_obj_t fota___del__(mp_obj_t self_in)
 
 	Helios_Fota_Deinit(self->ctx);
     fota_callback = NULL;
+	fota_self_obj = NULL;
 
     return mp_obj_new_int(0);
 }
