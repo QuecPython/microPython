@@ -73,7 +73,8 @@ STATIC mp_obj_t qpy_securedata_read(size_t n_args, const mp_obj_t *pos_args, mp_
         return mp_obj_new_int(ret);
     }
 
-    strncpy((char *)bufinfo.buf, (char *)sec_data.pBuffer,strlen((char *)sec_data.pBuffer));
+    //strncpy((char *)bufinfo.buf, (char *)sec_data.pBuffer,strlen((char *)sec_data.pBuffer));
+    memcpy((char *)bufinfo.buf, (char *)sec_data.pBuffer, ret);
     if (sec_data.pBuffer)
     {
         free(sec_data.pBuffer);
