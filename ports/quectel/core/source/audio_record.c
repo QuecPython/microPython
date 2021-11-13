@@ -57,6 +57,7 @@ typedef struct _audio_record_obj_t {
 
 audio_record_obj_t *self_cur = NULL;
 
+static audio_record_obj_t *record_self_obj = NULL;
 
 static c_callback_t *g_record_callback;
 static c_callback_t *callback_cur;
@@ -75,7 +76,12 @@ STATIC mp_obj_t audio_record_make_new(const mp_obj_type_t *type, size_t n_args, 
 {
     mp_arg_check_num(n_args, n_kw, 0, 1, true);
 
-	audio_record_obj_t *self = m_new_obj_with_finaliser(audio_record_obj_t);
+	if (record_self_obj == NULL)
+    {
+    	record_self_obj = m_new_obj_with_finaliser(audio_record_obj_t);
+    }
+	audio_record_obj_t *self = record_self_obj;
+	
 	self->base.type = &audio_record_type;
 
 	self->isbusy = 0;
@@ -826,6 +832,7 @@ STATIC mp_obj_t helios_audio_deinit(mp_obj_t self_in)
 		Helios_OSTimer_Delete(self->rec_timer);
 	}
 
+	record_self_obj = NULL;
 	g_record_callback = NULL;
 	callback_cur = NULL;
 	record_state = 0;
