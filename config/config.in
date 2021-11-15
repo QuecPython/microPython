@@ -18,18 +18,6 @@ help
     This is qrcode support.
 
 
-choice POC_PLATFORM
-   bool "Select POC platform"
-   default POC_BND
-   depends on POC
-   help
-       Select POC platform.
-
-config POC_BND
-   bool "bnd platform"
-config POC_SL
-   bool "sl platform"
-endchoice
 
 config CAMERA 
     bool "Enable camera" 
