@@ -157,6 +157,11 @@ void mp_deinit(void) {
     MICROPY_PORT_DEINIT_FUNC;
     #endif
 
+    //Remove the GIL lock to prevent memory leaks.
+    #if MICROPY_PY_THREAD_GIL
+    mp_thread_mutex_del(&MP_STATE_VM(gil_mutex));
+    #endif
+
     // mp_obj_dict_free(&dict_main);
     // mp_map_deinit(&MP_STATE_VM(mp_loaded_modules_map));
 }
