@@ -246,7 +246,7 @@ STATIC mp_obj_t machine_lcd_init_helper(machine_lcd_obj_t *self, mp_uint_t n_arg
 		init_data.clk != HELIOS_SPI_LCD_CLK_52M) || 
 		(init_data.dataline != 1 && init_data.dataline != 2) ||
 		(init_data.linenum != 4 && init_data.linenum != 3) ||
-		(init_data.lcdtype != 0 && init_data.lcdtype != 1 )) {
+		(init_data.lcdtype >= HELIOS_LCD_TYPE_LIMIT) || init_data.lcdtype < 0) {
 		mp_raise_ValueError("Initialization parameter error(clk or dataline or linenum or lcdtype)");
 		return mp_obj_new_int(-5);
 	}
