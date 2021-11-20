@@ -561,6 +561,7 @@ INC += -I$(ROOT)/components/lvgl/src/lv_hal
 INC += -I$(ROOT)/components/lvgl/src/lv_misc
 INC += -I$(ROOT)/components/lvgl/src/lv_objx
 INC += -I$(ROOT)/components/lvgl/src/lv_themes
+INC += -I$(ROOT)/components/lvgl/src/lv_lib_png
 endif
 ifeq (y, $(CONFIG_QRCODE))
 INC += -I$(ROOT)/components/qrcode
