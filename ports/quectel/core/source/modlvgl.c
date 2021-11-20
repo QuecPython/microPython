@@ -49,6 +49,7 @@
 #include "helios_lcd.h"
 #include "helios_os.h"
 #include "helios_debug.h"
+#include "lv_png.h"
 
 #define QPY_LVGL_LOG(msg, ...)      custom_log(lvgl, msg, ##__VA_ARGS__)
 
@@ -26159,7 +26160,14 @@ STATIC mp_obj_t mp_lv_init(size_t mp_n_args, const mp_obj_t *mp_args)
 
 STATIC MP_DEFINE_CONST_LV_FUN_OBJ_VAR(mp_lv_init_obj, 0, mp_lv_init, lv_init);
 
- 
+ STATIC mp_obj_t mp_lv_png_init(size_t mp_n_args, const mp_obj_t *mp_args)
+{
+    
+	lv_png_init();
+    return mp_const_none;
+}
+
+STATIC MP_DEFINE_CONST_LV_FUN_OBJ_VAR(mp_lv_png_init_obj, 0, mp_lv_png_init, lv_png_init);
 
 /*
  * lvgl extension definition for:
@@ -32926,6 +32934,7 @@ STATIC const mp_rom_map_elem_t lvgl_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_bidi_get_logical_pos), MP_ROM_PTR(&mp_lv_bidi_get_logical_pos_obj) },
     { MP_ROM_QSTR(MP_QSTR_bidi_get_visual_pos), MP_ROM_PTR(&mp_lv_bidi_get_visual_pos_obj) },
     { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&mp_lv_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR_png_init), MP_ROM_PTR(&mp_lv_png_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_event_send), MP_ROM_PTR(&mp_lv_event_send_obj) },
     { MP_ROM_QSTR(MP_QSTR_event_send_func), MP_ROM_PTR(&mp_lv_event_send_func_obj) },
     { MP_ROM_QSTR(MP_QSTR_event_get_data), MP_ROM_PTR(&mp_lv_event_get_data_obj) },
