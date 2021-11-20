@@ -358,12 +358,9 @@ ifeq ($(CONFIG_LVGL), y)
 $(NAME)_COMPONENTS += components/lvgl
 endif
 
-ifeq ($(CONFIG_SPINAND), y)
+ifneq (,$(filter y,$(CONFIG_SPINAND) $(CONFIG_SPI_SDCARD)))
 $(NAME)_COMPONENTS += components/fs
-else ifeq ($(CONFIG_SPI_SDCARD), y)
-$(NAME)_COMPONENTS += components/fs/fatfs
 endif
-
 
 ifeq ($(CONFIG_RTMP), y)
 $(NAME)_COMPONENTS += components/rtmpdump
