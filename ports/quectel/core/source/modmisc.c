@@ -68,7 +68,12 @@ STATIC const mp_rom_map_elem_t misc_module_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_USB), MP_ROM_PTR(&misc_usb_type) },
 #endif
 #endif
-#if defined(PLAT_ASR)
+
+#if defined(PLAT_RDA)
+		{ MP_ROM_QSTR(MP_QSTR_Temperature), MP_ROM_PTR(&machine_temperature_type) },
+#endif
+
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
     { MP_ROM_QSTR(MP_QSTR_USBNET), MP_ROM_PTR(&misc_usbnet_module) },
 #endif
 };

@@ -362,6 +362,7 @@ typedef struct _vfs_efs_ilistdir_it_t {
     mp_fun_1_t iternext;
     bool is_str;
     void *dir;
+	char ilist_path[64];
 	bool readonly;
 } vfs_efs_ilistdir_it_t;
 
@@ -402,14 +403,8 @@ STATIC mp_obj_t vfs_efs_ilistdir_it_iternext(mp_obj_t self_in) {
 		{
 	        t->items[0] = mp_obj_new_bytes((const byte *)iter_entry.file_Path, strlen(iter_entry.file_Path));
 	    }
-		if(self->readonly)
-		{
-			sprintf(real_file_path, "%s%s", "/bak/", iter_entry.file_Path);
-		}
-		else
-		{
-			sprintf(real_file_path, "%s%s", "/usr/", iter_entry.file_Path);
-		}
+
+		sprintf(real_file_path, "%s%s", self->ilist_path, iter_entry.file_Path);
 		Helios_fstat(real_file_path, &sb);
 		memset (real_file_path, 0, sizeof(real_file_path));
 	    t->items[1] = MP_OBJ_NEW_SMALL_INT(((sb.st_Mode) & EFS_IFMT) == EFS_IFDIR ? MP_S_IFDIR : MP_S_IFREG);
@@ -433,6 +428,7 @@ STATIC mp_obj_t vfs_efs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
     iter->is_str = mp_obj_get_type(path_in) == &mp_type_str;
     const char *path = mp_obj_str_get_str(path_in);
 	char f_path[64] = "";
+	int len = 0;
 	
     if (path[0] == '\0') {
         path = ".";
@@ -448,6 +444,9 @@ STATIC mp_obj_t vfs_efs_ilistdir(mp_obj_t self_in, mp_obj_t path_in) {
 		sprintf(f_path, "%s%s", "/usr", path);
 		iter->readonly = false;
 	}
+	len = (strlen(f_path) < 60) ? strlen(f_path) : 60;
+	memset (iter->ilist_path, 0, sizeof(iter->ilist_path));
+	strncpy(iter->ilist_path, f_path, len); 
 	
     iter->dir = Helios_fdiropen(f_path);
     if (iter->dir == NULL) {

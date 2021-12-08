@@ -76,5 +76,8 @@ def setCallback(usrfun):
 def setAutoConnect(profileidx, enable):
     return dial.setAutoConnect(profileidx, enable)
 
-def getApn(simid):
-    return dial.getApn(simid)
+def getApn(*args):
+    return dial.getApn(*args)
+
+def setDnsserver(profileidx, simid, new_pri, new_sec):
+    return dial.setDnsserver(profileidx, simid, new_pri, new_sec)

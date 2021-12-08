@@ -30,12 +30,18 @@
 
 #include "py/runtime.h"
 #include "mphalport.h"
+#include "callbackdeal.h"
 
 #if MICROPY_KBD_EXCEPTION
 // This function may be called asynchronously at any time so only do the bare minimum.
 void MICROPY_WRAP_MP_KEYBOARD_INTERRUPT(mp_keyboard_interrupt)(void) {
     MP_STATE_VM(mp_kbd_exception).traceback_data = NULL;
     MP_STATE_VM(mp_pending_exception) = MP_OBJ_FROM_PTR(&MP_STATE_VM(mp_kbd_exception));
+#if MICROPY_ENABLE_CALLBACK_DEAL
+#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
+    quecpython_send_msg_to_sleep_func();
+#endif
+#endif
     #if MICROPY_ENABLE_SCHEDULER
     if (MP_STATE_VM(sched_state) == MP_SCHED_IDLE) {
         MP_STATE_VM(sched_state) = MP_SCHED_PENDING;
@@ -67,7 +73,9 @@ void mp_handle_pending(bool raise_exc) {
         if (MP_STATE_VM(sched_state) == MP_SCHED_PENDING) {
             mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
             if (obj != MP_OBJ_NULL) {
+                #if MICROPY_KBD_EXCEPTION
                 CHECK_MAINPY_KBD_INTERRUPT_ENTER()
+                #endif
                 MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
                 if (!mp_sched_num_pending()) {
                     MP_STATE_VM(sched_state) = MP_SCHED_IDLE;
@@ -76,7 +84,9 @@ void mp_handle_pending(bool raise_exc) {
                     MICROPY_END_ATOMIC_SECTION(atomic_state);
                     nlr_raise(obj);
                 }
+                #if MICROPY_KBD_EXCEPTION
                 CHECK_MAINPY_KBD_INTERRUPT_EXIT()
+                #endif
             }
             mp_handle_pending_tail(atomic_state);
         } else {
@@ -142,19 +152,24 @@ bool MICROPY_WRAP_MP_SCHED_SCHEDULE(mp_sched_schedule)(mp_obj_t function, mp_obj
         ret = false;
     }
     MICROPY_END_ATOMIC_SECTION(atomic_state);
-#if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
+
     if(true == ret) {
-    	quecpython_send_msg_to_sleep_func();
+    #if MICROPY_ENABLE_CALLBACK_DEAL
+        extern Helios_Thread_t qpy_callback_deal_task_ref;
+	    if(Helios_Thread_GetID() != qpy_callback_deal_task_ref) {
+    	    qpy_send_msg_to_callback_deal_thread(CALLBACK_TYPE_ID_NONE, NULL);
+    	}
+    #else
+        #if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
+        quecpython_send_msg_to_sleep_func();
+        #endif
+    #endif
     	mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
     }
-#else 
-    if(true == ret) {
-    	mp_hal_stdin_send_msg_to_rx_chr();//forrest.liu@20210809 add for quecpython task repl using waiting msg
-    }
-#endif
     return ret;
 }
 
+extern bool mp_obj_is_boundmeth(mp_obj_t o);
 extern mp_obj_t mp_obj_bound_get_self(void *bound);
 extern mp_obj_t mp_obj_bound_get_meth(void *bound);
 //Add a callback to the unscheduled table. If it is a Method,
@@ -172,8 +187,12 @@ bool mp_sched_schedule_ex(c_callback_t *callback, mp_obj_t arg)
     }
     else if(true == callback->is_method)//bound_method
     {
-        mp_obj_t cb = mp_load_attr(callback->method_self, callback->method_name);
-        return mp_sched_schedule(cb, arg);
+        if(mp_obj_is_boundmeth(callback->cb)) {
+            return mp_sched_schedule(callback->cb, arg);
+        } else {
+            mp_obj_t cb = mp_load_attr(callback->method_self, callback->method_name);
+            return mp_sched_schedule(cb, arg);
+        }
     }
     else
     {

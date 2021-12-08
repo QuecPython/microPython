@@ -58,13 +58,12 @@ STATIC mp_obj_t qpy_datacall_start(size_t n_args, const mp_obj_t *args)
 	mp_get_buffer_raise(args[3], &usrinfo, MP_BUFFER_READ);
 	mp_get_buffer_raise(args[4], &pwdinfo, MP_BUFFER_READ);
 
-	if ((profile_id < (int)HELIOS_PROFILE_IDX_MIN) || (profile_id > (int)HELIOS_PROFILE_IDX_MAX))
+	int min_profile_id = (int)HELIOS_PROFILE_IDX_MIN;
+	int max_profile_id = (int)HELIOS_PROFILE_IDX_MAX;
+	
+	if ((profile_id < min_profile_id) || (profile_id > max_profile_id))
 	{
-#if defined (PLAT_ASR)
-		mp_raise_ValueError("invalid value, profileIdx should be in [1,8].");
-#elif defined (PLAT_Unisoc)
-		mp_raise_ValueError("invalid value, profileIdx should be in [1,7].");
-#endif
+		mp_raise_msg_varg(&mp_type_ValueError, "invalid value, profileIdx should be in [%d,%d].", min_profile_id, max_profile_id);
 	}
 	if ((ip_type < 0) || (ip_type > 2))
 	{
@@ -96,7 +95,11 @@ STATIC mp_obj_t qpy_datacall_start(size_t n_args, const mp_obj_t *args)
     snprintf(DataCallStartStruct.apn, sizeof(DataCallStartStruct.apn), "%s", (char *)apninfo.buf);
     snprintf(DataCallStartStruct.user, sizeof(DataCallStartStruct.user), "%s", (char *)usrinfo.buf);
     snprintf(DataCallStartStruct.pwd, sizeof(DataCallStartStruct.pwd), "%s", (char *)pwdinfo.buf);
+    
+    MP_THREAD_GIL_EXIT();
     ret = Helios_DataCall_Start(profile_id, 0, &DataCallStartStruct);
+    MP_THREAD_GIL_ENTER();
+    
 	return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_datacall_start_obj, 5, 6, qpy_datacall_start);
@@ -133,13 +136,12 @@ STATIC mp_obj_t qpy_datacall_record_apn(size_t n_args, const mp_obj_t *args)
 	mp_get_buffer_raise(args[3], &usrinfo, MP_BUFFER_READ);
 	mp_get_buffer_raise(args[4], &pwdinfo, MP_BUFFER_READ);
 
-	if ((profile_id < (int)HELIOS_PROFILE_IDX_MIN) || (profile_id > (int)HELIOS_PROFILE_IDX_MAX))
+	int min_profile_id = (int)HELIOS_PROFILE_IDX_MIN;
+	int max_profile_id = (int)HELIOS_PROFILE_IDX_MAX;
+	
+	if ((profile_id < min_profile_id) || (profile_id > max_profile_id))
 	{
-#if defined (PLAT_ASR)
-		mp_raise_ValueError("invalid value, profileIdx should be in [1,8].");
-#elif defined (PLAT_Unisoc)
-		mp_raise_ValueError("invalid value, profileIdx should be in [1,7].");
-#endif
+		mp_raise_msg_varg(&mp_type_ValueError, "invalid value, profileIdx should be in [%d,%d].", min_profile_id, max_profile_id);
 	}
 	if ((ip_type < 0) || (ip_type > 2))
 	{
@@ -233,14 +235,12 @@ STATIC mp_obj_t qpy_datacall_get_info(size_t n_args, const mp_obj_t *args)
 	char ip6_pri_dns[64] = {0};
 	char ip6_sec_dns[64] = {0};
 	Helios_DataCallInfoStruct info = {0};
+	int min_profile_id = (int)HELIOS_PROFILE_IDX_MIN;
+	int max_profile_id = (int)HELIOS_PROFILE_IDX_MAX;
 	
-	if ((profile_id < (int)HELIOS_PROFILE_IDX_MIN) || (profile_id > (int)HELIOS_PROFILE_IDX_MAX))
+	if ((profile_id < min_profile_id) || (profile_id > max_profile_id))
 	{
-#if defined (PLAT_ASR)
-		mp_raise_ValueError("invalid value, profileIdx should be in [1,8].");
-#elif defined (PLAT_Unisoc)
-		mp_raise_ValueError("invalid value, profileIdx should be in [1,7].");
-#endif
+		mp_raise_msg_varg(&mp_type_ValueError, "invalid value, profileIdx should be in [%d,%d].", min_profile_id, max_profile_id);
 	}
 	if ((ip_type < 0) || (ip_type > 2))
 	{
@@ -369,7 +369,7 @@ STATIC mp_obj_t qpy_datacall_get_pdp_range(void)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_get_pdp_range_obj, qpy_datacall_get_pdp_range);
 
 //#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
-STATIC mp_obj_t qpy_datacall_get_apn(mp_obj_t simid)
+/*STATIC mp_obj_t qpy_datacall_get_apn(mp_obj_t simid)
 {
 #if defined(PLAT_ASR) || defined(PLAT_Unisoc)
     int sim_id = mp_obj_get_int(simid);
@@ -386,8 +386,72 @@ STATIC mp_obj_t qpy_datacall_get_apn(mp_obj_t simid)
     return mp_obj_new_int(-1);
 #endif
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_datacall_get_apn_obj, qpy_datacall_get_apn);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_datacall_get_apn_obj, qpy_datacall_get_apn);*/
 //#endif
+
+STATIC mp_obj_t qpy_datacall_get_apn(size_t n_args, const mp_obj_t *args)
+{
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+    int sim_id = mp_obj_get_int(args[0]);
+    int ret = 0;
+    char apn[99+1] = {0};
+
+    if (n_args == 1)
+    {
+        ret = Helios_DataCall_GetApn(2, sim_id, apn);
+    	if (ret == 0)
+    	{
+    		return mp_obj_new_str(apn, strlen(apn));
+    	}
+    	return mp_obj_new_int(-1);
+    }
+    else if (n_args == 2)
+    {
+        int pid = mp_obj_get_int(args[1]);
+        
+        ret = Helios_DataCall_GetApn(3, sim_id, apn, pid);
+    	if (ret == 0)
+    	{
+    		return mp_obj_new_str(apn, strlen(apn));
+    	}
+    	return mp_obj_new_int(-1);
+    }
+    else
+    {
+        mp_raise_ValueError("invalid value, The number of parameters cannot be greater than 2.");
+    }
+#else
+    return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
+#endif
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_datacall_get_apn_obj, 1, 2, qpy_datacall_get_apn);
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+
+STATIC mp_obj_t qpy_datacall_set_dns_server(size_t n_args, const mp_obj_t *args)
+{
+    int profile_idx  = mp_obj_get_int(args[0]);
+    int sim_id     = mp_obj_get_int(args[1]);
+
+    mp_buffer_info_t new_pri_dns = {0};
+    mp_buffer_info_t new_sec_dns = {0};
+    mp_get_buffer_raise(args[2], &new_pri_dns, MP_BUFFER_READ);
+    mp_get_buffer_raise(args[3], &new_sec_dns, MP_BUFFER_READ);
+
+    char new_pri[128];
+    char new_sec[128];
+    memset(&new_pri, 0, sizeof(new_pri));
+    memset(&new_sec, 0, sizeof(new_sec));
+
+    memcpy(new_pri, new_pri_dns.buf, new_pri_dns.len);
+    memcpy(new_sec, new_sec_dns.buf, new_sec_dns.len);
+
+    int ret = 0;
+    ret = Helios_DataCall_SetDnsServer(profile_idx, sim_id, new_pri, new_sec);
+
+    return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_datacall_set_dns_server_obj, 4, 4, qpy_datacall_set_dns_server);
+#endif
 
 STATIC mp_obj_t qpy_module_datacall_deinit(void)
 {
@@ -410,9 +474,10 @@ STATIC const mp_rom_map_elem_t mp_module_datacall_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_recordApn),		MP_ROM_PTR(&qpy_datacall_record_apn_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setAsynMode),		MP_ROM_PTR(&qpy_datacall_set_asynmode_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_getPdpRange),		MP_ROM_PTR(&qpy_get_pdp_range_obj) },
-	//#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_getApn), 	        MP_ROM_PTR(&qpy_datacall_get_apn_obj) },
-	//#endif
+	#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+	{ MP_ROM_QSTR(MP_QSTR_setDnsserver),    MP_ROM_PTR(&qpy_datacall_set_dns_server_obj) },
+	#endif
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_datacall_globals, mp_module_datacall_globals_table);
 

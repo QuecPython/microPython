@@ -34,11 +34,14 @@ extern const mp_obj_type_t misc_power_type;
 extern const mp_obj_type_t misc_pwm_type;
 extern const mp_obj_type_t misc_adc_type;
 extern const mp_obj_type_t misc_usb_type;
-#if defined(PLAT_ASR)
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 extern const mp_obj_module_t misc_usbnet_module;
 #endif
 extern const mp_obj_type_t misc_powerkey_type;
 
+#if defined(PLAT_RDA)
+extern const mp_obj_module_t machine_temperature_type;
+#endif
 
 #endif /* __MOD_MISC_H_ */
 

@@ -67,12 +67,14 @@ typedef struct _preview_obj_t {
 	unsigned char perview;
 	unsigned char decbufcnt;
 	c_callback_t *callback;
-	//int  inited;
+	bool  is_open;
 } preview_obj_t;
 
 static preview_obj_t *capture_obj = NULL;
 
 static Helios_CAMConfig camconfig = {0};
+
+#define CHECK_CMAERA_IS_OPEN (capture_obj->is_open ? TRUE:FALSE)
 
 
 static unsigned short *g_lcd_buffer = NULL;
@@ -185,6 +187,7 @@ STATIC mp_obj_t caputre_make_new(const mp_obj_type_t *type, size_t n_args, size_
 	self->lcd_h = lcdpreheight;
 	self->lcd_w = lcdprewidth;
 	self->prebufcnt = prebufcnt;
+	self->is_open = FALSE;
 
 	camconfig.model = model;
 	camconfig.camheight = camheight;
@@ -207,8 +210,12 @@ STATIC mp_obj_t caputre_make_new(const mp_obj_type_t *type, size_t n_args, size_
 
 STATIC mp_obj_t camera_open(mp_obj_t self_in)
 {
+	preview_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	CAPTURE_LOG("open %d,%d,%d,%d,%d\n",camconfig.camheight,camconfig.camwidth,camconfig.lcdpreheight,camconfig.lcdprewidth,camconfig.prebufcnt);
 	int error =  Helios_camera_open(&camconfig);//ql_start_preview(data);
+	if(0 == error) {
+		self->is_open = TRUE;
+	}
 
 	return mp_obj_new_int(error);
 }
@@ -216,8 +223,11 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(camera_capture_open_obj, camera_open);
 
 STATIC mp_obj_t camera_close(mp_obj_t self_in)
 {
-
+	preview_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	int error =  Helios_camera_close();
+	if(0 == error) {
+		self->is_open = FALSE;
+	}
 
 	return mp_obj_new_int(error);
 }
@@ -240,6 +250,11 @@ STATIC mp_obj_t camera_capture_start(size_t n_args, const mp_obj_t *pos_args, mp
         MP_ARRAY_SIZE(capture_open_allowed_args), capture_open_allowed_args, args);
 
 	char *picname = NULL;
+
+	if(!CHECK_CMAERA_IS_OPEN) {
+		mp_raise_ValueError("camera is not open");
+	}
+	
 	if (mp_obj_is_str(args[ARG_picture_name].u_obj)) {
 		picname = (char*)mp_obj_str_get_str(args[ARG_picture_name].u_obj);
 	}

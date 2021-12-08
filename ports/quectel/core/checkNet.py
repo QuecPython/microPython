@@ -91,7 +91,7 @@ class CheckNetwork():
                 if timeout_ms <= 0:
                     return stage_code, -1
             else:
-                if net_sta[1][0] == 1:
+                if (net_sta[1][0] == 1) or (net_sta[1][0] == 5):
                     break
                 else:
                     utime.sleep_ms(100)
@@ -140,7 +140,7 @@ def wait_network_connected(timeout_s=60):
             if timeout_ms <= 0:
                 return stage_code, -1
         else:
-            if net_sta[1][0] == 1:
+            if (net_sta[1][0] == 1) or (net_sta[1][0] == 5):
                 break
             else:
                 utime.sleep_ms(100)

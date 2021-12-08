@@ -39,6 +39,7 @@ void mp_thread_mutex_init(mp_thread_mutex_t *mutex);
 int mp_thread_mutex_lock(mp_thread_mutex_t *mutex, int wait);
 void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex);
 void mp_thread_mutex_del(mp_thread_mutex_t *mutex);
+void mp_new_thread_add(uint32_t th_id, uint32_t stack_size);
 
 #endif // MICROPY_INCLUDED_MPTHREADPORT_H
 

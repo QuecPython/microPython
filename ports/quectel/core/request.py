@@ -166,7 +166,7 @@ def request(method, url, data=None, json=None, files=None, stream=None, decode=T
         if headers:
             if files:
                 boundary = str(utime.time())
-                if not (files.get("filepath") and files.get("filepath")):
+                if not (files.get("filepath") and files.get("filename")):
                     raise ValueError("Missing key parameters 'filepath' and 'filename'")
                 if headers.get('Content-Type') == "multipart/form-data":
                     headers['Content-Type'] = headers['Content-Type'] + '; boundary={}'.format(boundary)
@@ -195,11 +195,24 @@ def request(method, url, data=None, json=None, files=None, stream=None, decode=T
             with open('{}'.format(files.get("filepath")), 'r') as f:
                 content = f.read()
                 if files.get("name") is not None:
-                    datas = '--{0}{1}Content-Disposition: form-data; {2}{1}{1}{3}{1}--{0}--{1}'. \
+                    datas = '--{0}{1}Content-Disposition: form-data; {2}{1}{1}{3}{1}--{0}'. \
                         format(boundary, '\r\n', files.get("name"), content)
                 else:
-                    datas = '--{0}{1}Content-Disposition: form-data; name="file"; filename="{2}"{1}Content-Type: application/octet-stream{1}{1}{3}{1}--{0}--{1}'. \
+                    datas = '--{0}{1}Content-Disposition: form-data; name="file"; filename="{2}"{1}Content-Type: application/octet-stream{1}{1}{3}{1}--{0}'. \
                         format(boundary, '\r\n', files.get("filename"), content)
+
+                if files.get("filepath1") is not None:
+                    with open('{}'.format(files.get("filepath1")), 'r') as f1:
+                        content1 = f1.read()
+                        if files.get("name1") is not None:
+                            datas += '{1}Content-Disposition: form-data; {2}{1}{1}{3}{1}--{0}'. \
+                                    format(boundary, '\r\n', files.get("name1"), content1)
+                        else:
+                            if files.get("filename1") is None:
+                                raise ValueError("Missing key parameters 'filename1' ")
+                            datas += '{1}Content-Disposition: form-data; name="file"; filename="{2}"{1}Content-Type: application/octet-stream{1}{1}{3}{1}--{0}'. \
+                                      format(boundary, '\r\n', files.get("filename1"), content1)
+                datas += "--\r\n"
                 s.write(b"Content-Length: %d\r\n" % len(datas))
                 s.write(b"\r\n")
                 s.write(datas)

@@ -126,12 +126,14 @@ STATIC mp_obj_t example_exec(const mp_obj_t arg0)
 	{
 		mp_raise_msg_varg(&mp_type_OSError, "File path error or not exist: [%s]", (char *)bufinfo.buf);
 	}
+	#if MICROPY_KBD_EXCEPTION
 	else if(ret == RET_KBD_INTERRUPT)
 	{
         pyexec_system_exit = PYEXEC_FORCED_EXIT;
         MAINPY_INTERRUPT_BY_KBD_FLAG_SET();
         mp_raise_msg_varg(&mp_type_SystemExit, "CTRL_C Interrupt");
 	}
+	#endif
 	// Pawn 2021-01-18 for JIRA STASR3601-2428 end
 	return mp_const_none;
 }

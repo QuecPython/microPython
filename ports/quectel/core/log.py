@@ -100,6 +100,14 @@ def getLogger(name="root"):
     _loggers[name] = l
     return l
 
+def set_output(out):
+    global _stream
+    from machine import UART
+    if isinstance(out, UART):
+        _stream = out
+    else:
+        raise Exception("{} must extend UART".format(out))
+
 def basicConfig(level=INFO, filename=None, stream=None, format=None):
     global _level, _stream
     _level = level

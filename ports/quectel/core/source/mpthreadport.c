@@ -178,6 +178,20 @@ int mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
     return thread_id;
 }
 
+void mp_new_thread_add(uint32_t th_id, uint32_t stack_size) {
+    // Allocate linked-list node (must be outside thread_mutex lock)
+    thread_t *th = m_new_obj(thread_t);
+    // add thread to linked list of all threads
+    th->id = th_id;
+    th->ready = 0;
+    th->arg = NULL;
+    th->stack = Helios_Thread_GetStaskPtr((Helios_Thread_t)th->id);
+	
+    th->stack_len = stack_size / sizeof(uint32_t);
+    th->next = thread;
+    thread = th;
+}
+
 void mp_thread_finish(void) {
     mp_thread_mutex_lock(&thread_mutex, 1);
     for (thread_t *th = thread; th != NULL; th = th->next) {

@@ -39,6 +39,32 @@ STATIC mp_obj_t misc_usbnet_set_type(mp_obj_t type_in)
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(misc_usbnet_set_type_obj, misc_usbnet_set_type);
 
 
+STATIC mp_obj_t misc_usbnet_get_type(void)
+{
+	Helios_USBNET_Type_e type = 0;
+	int ret = Helios_USBNET_GetType(&type);
+	if (ret == 0)
+	{
+		ret = type;
+	}
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_usbnet_get_type_obj, misc_usbnet_get_type);
+
+
+STATIC mp_obj_t misc_usbnet_get_status(void)
+{
+	uint8_t status = 0;
+	int ret = Helios_USBNET_GetStatus(&status);
+	if (ret == 0)
+	{
+		ret = status;
+	}
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_usbnet_get_status_obj, misc_usbnet_get_status);
+
+
 STATIC mp_obj_t misc_usbnet_open(void)
 {
 	int ret = Helios_USBNET_Open();
@@ -47,14 +73,24 @@ STATIC mp_obj_t misc_usbnet_open(void)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_usbnet_open_obj, misc_usbnet_open);
 
 
+STATIC mp_obj_t misc_usbnet_close(void)
+{
+	int ret = Helios_USBNET_Close();
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(misc_usbnet_close_obj, misc_usbnet_close);
+
 
 
 STATIC const mp_rom_map_elem_t misc_usbnet_locals_dict_table[] = {
-    { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_USBNET) },
-	{ MP_ROM_QSTR(MP_QSTR_set_worktype), MP_ROM_PTR(&misc_usbnet_set_type_obj) },
-	{ MP_ROM_QSTR(MP_QSTR_open), MP_ROM_PTR(&misc_usbnet_open_obj) },
-	{ MP_ROM_QSTR(MP_QSTR_Type_ECM), MP_ROM_INT(HELIOS_USBNET_TYPE_ECM) },
-	{ MP_ROM_QSTR(MP_QSTR_Type_RNDIS), MP_ROM_INT(HELIOS_USBNET_TYPE_RNDIS) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR___name__), 	MP_ROM_QSTR(MP_QSTR_USBNET) },
+	{ MP_ROM_QSTR(MP_QSTR_set_worktype), 	MP_ROM_PTR(&misc_usbnet_set_type_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_get_worktype), 	MP_ROM_PTR(&misc_usbnet_get_type_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_get_status), 		MP_ROM_PTR(&misc_usbnet_get_status_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_open), 			MP_ROM_PTR(&misc_usbnet_open_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_close), 			MP_ROM_PTR(&misc_usbnet_close_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_Type_ECM), 		MP_ROM_INT(HELIOS_USBNET_TYPE_ECM) },
+	{ MP_ROM_QSTR(MP_QSTR_Type_RNDIS), 		MP_ROM_INT(HELIOS_USBNET_TYPE_RNDIS) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(misc_usbnet_locals_dict, misc_usbnet_locals_dict_table);

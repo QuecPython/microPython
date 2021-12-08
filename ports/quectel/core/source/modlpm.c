@@ -140,7 +140,7 @@ STATIC mp_obj_t Helios_lpm_wakelock_create_mp(size_t n_args, const mp_obj_t *arg
   int name_size;
   
   char *lock_name = (char *)mp_obj_str_get_str(args[0]);
-  name_size = mp_obj_get_int(args[1]);
+  name_size = strlen(lock_name);
   
 #if 0   //Aim At  EC100Y by kingka
   ret = quec_lpm_task_init();
@@ -150,6 +150,11 @@ STATIC mp_obj_t Helios_lpm_wakelock_create_mp(size_t n_args, const mp_obj_t *arg
   }
 #endif
 
+  if((NULL == lock_name) || (0 == name_size))
+  {
+	return mp_obj_new_int(-1);
+  }
+  	
   wakelock_fd = Helios_LPM_WakeLockInit(lock_name, name_size);
 
   
@@ -212,6 +217,35 @@ STATIC mp_obj_t Helios_lpm_get_wakelock_num_mp()
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(Helios_lpm_get_wakelock_num_mp_obj, Helios_lpm_get_wakelock_num_mp);
 #endif
 
+/*=============================================================================*/
+/* FUNCTION: Helios_lpm_ex_set_mp                                             */
+/*=============================================================================*/
+/*!@brief     : set power ex
+ * @param[in]   : lpm seconds
+ * @param[out]  :
+ * @return    :
+ *        0     success
+ *		  else  fail
+ */
+/*=============================================================================*/
+#if defined(PLAT_ASR)
+STATIC mp_obj_t Helios_lpm_ex_set_mp(const mp_obj_t lpm_seconds)
+{
+  int ret = 0;
+  int g_lpm_seconds;
+  
+  g_lpm_seconds = mp_obj_get_int(lpm_seconds);
+  ret = Helios_LPM_EXSet(g_lpm_seconds);
+  if ( ret == 0 )
+  {
+    return mp_obj_new_int(0);
+  }
+  
+  return mp_obj_new_int(-1);
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(Helios_lpm_ex_set_mp_obj, Helios_lpm_ex_set_mp);
+#endif
 
 /*
 STATIC mp_obj_t mp_get_free_size()
@@ -237,6 +271,9 @@ STATIC const mp_rom_map_elem_t pm_module_globals_table[] = {
 #endif
   { MP_ROM_QSTR(MP_QSTR_autosleep), MP_ROM_PTR(&Helios_sleep_enable_mp_obj) },
   // { MP_ROM_QSTR(MP_QSTR_getFreeSize), MP_ROM_PTR(&mp_get_free_size_obj) },
+#if defined(PLAT_ASR)
+  { MP_ROM_QSTR(MP_QSTR_sclkEx_set), MP_ROM_PTR(&Helios_lpm_ex_set_mp_obj) },
+#endif
 };
 STATIC MP_DEFINE_CONST_DICT(pm_module_globals, pm_module_globals_table);
 

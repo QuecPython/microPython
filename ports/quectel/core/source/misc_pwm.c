@@ -65,38 +65,42 @@ STATIC void misc_pwm_print(const mp_print_t *print, mp_obj_t self_in, mp_print_k
 
 STATIC void misc_pwm_init_helper(misc_pwm_obj_t *self,
     size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_high_time, ARG_cycle_time };
+    enum { ARG_cycle_range, ARG_high_time, ARG_cycle_time };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_high_time, MP_ARG_INT, {.u_int = 0} },
-        { MP_QSTR_cycle_time, MP_ARG_INT, {.u_int = 0} },
+    	{ MP_QSTR_cycle_range, MP_ARG_INT, {.u_int = 0} },
+        { MP_QSTR_high_time,   MP_ARG_INT, {.u_int = 0} },
+        { MP_QSTR_cycle_time,  MP_ARG_INT, {.u_int = 0} },
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args,
         MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-	PWM_LOG("self->cycle_range = %d\n",self->cycle_range);
-   if(self->cycle_range != HELIOS_PWM_CYCLE_ABOVE_1US && self->cycle_range != HELIOS_PWM_CYCLE_ABOVE_1MS && self->cycle_range != HELIOS_PWM_CYCLE_ABOVE_10US && self->cycle_range != HELIOS_PWM_CYCLE_ABOVE_BELOW_US ) {
-
-   		mp_raise_ValueError("invalid cycle_range value, must be in {0:us or 1:ms or 2:10us}");
-   }
-
+	//PWM_LOG("cycle_range=%d, high_time=%d, cycle_time=%d\n",args[ARG_cycle_range].u_int, args[ARG_high_time].u_int, args[ARG_cycle_time].u_int);
+	
+	if ((args[ARG_cycle_range].u_int < HELIOS_PWM_CYCLE_ABOVE_1US) || (args[ARG_cycle_range].u_int > HELIOS_PWM_CYCLE_ABOVE_BELOW_US))
+	{
+		mp_raise_ValueError("invalid cycle_range value, must be in {0:us, 1:ms, 2:10us, 3:below us}.");
+	}
     // get high time
-    if (args[ARG_high_time].u_int > 0 && args[ARG_high_time].u_int < 65535) {
-		self->high_time = args[ARG_high_time].u_int;
-	} else {
+    if ((args[ARG_high_time].u_int < 0) || (args[ARG_high_time].u_int > 65535))
+	{
 		mp_raise_ValueError("invalid high_time value, must be in {0~65535}");
 	}
-
     // get cycle time
-    if (args[ARG_cycle_time].u_int > 0 && args[ARG_cycle_time].u_int < 65535) {
-		self->cycle_time = args[ARG_cycle_time].u_int;
-	} else {
+    if ((args[ARG_cycle_time].u_int < 0) || (args[ARG_cycle_time].u_int > 65535))
+	{
 		mp_raise_ValueError("invalid cycle_time value, must be in {0~65535}");
 	}
 
-	if(self->high_time > self->cycle_time) {
+	if(args[ARG_high_time].u_int > args[ARG_cycle_time].u_int)
+	{
 		mp_raise_ValueError("invalid high_time value, must less more cycle_time or be equal to cycle_time");
 	}
+
+	self->cycle_range = args[ARG_cycle_range].u_int;
+	self->high_time = args[ARG_high_time].u_int;
+	self->cycle_time = args[ARG_cycle_time].u_int;
+	PWM_LOG("cycle_range=%d, high_time=%d, cycle_time=%d\n",self->cycle_range, self->high_time, self->cycle_time);
 
 	if(Helios_PWM_Init(self->pin) != 0) {
 		mp_raise_ValueError("fail");
@@ -107,16 +111,15 @@ STATIC void misc_pwm_init_helper(misc_pwm_obj_t *self,
 STATIC mp_obj_t misc_pwm_make_new(const mp_obj_type_t *type,
     size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 4, 4, true);
-    unsigned int pin_id = mp_obj_get_int(args[0]);
-	unsigned int cycle_range_id = mp_obj_get_int(args[1]);
+    int pin_id = mp_obj_get_int(args[0]);
 
 	PWM_LOG("n_args = %d\n",n_args);
 
-	int pwm_num = pin_id;
-	if ((pwm_num < 0) || (pwm_num > PWMMAX-1))
+	if ((pin_id < 0) || (pin_id > PWMMAX-1))
 	{
 		mp_raise_ValueError("invalid PWMn value, must be in {0~3}.");
 	}
+	
     // create PWM object from the given pin
     if (misc_pwm_obj[pin_id] == NULL)
     {
@@ -125,14 +128,10 @@ STATIC mp_obj_t misc_pwm_make_new(const mp_obj_type_t *type,
     misc_pwm_obj_t *self = misc_pwm_obj[pin_id];
     self->base.type = &misc_pwm_type;
     self->pin = pin_id;
-    self->high_time = 0;
-    self->cycle_time = 0;
-	self->cycle_range = cycle_range_id;
 
     mp_map_t kw_args;
     mp_map_init_fixed_table(&kw_args, n_kw, args + n_args);
-	misc_pwm_init_helper(self, n_args - 2, args + 2, &kw_args);
-    
+	misc_pwm_init_helper(self, n_args - 1, args + 1, &kw_args);
 
     return MP_OBJ_FROM_PTR(self);
 }
@@ -146,7 +145,8 @@ MP_DEFINE_CONST_FUN_OBJ_KW(misc_pwm_init_obj, 1, misc_pwm_init);
 
 STATIC mp_obj_t misc_pwm_enable(mp_obj_t self_in) {
     misc_pwm_obj_t *self = MP_OBJ_TO_PTR(self_in);
-
+	
+	PWM_LOG("cycle_range=%d, high_time=%d, cycle_time=%d\n",self->cycle_range, self->high_time, self->cycle_time);
 	double frequency = 0;
 	float duty = 0;
 	if(self->cycle_range == HELIOS_PWM_CYCLE_ABOVE_1US || self->cycle_range == HELIOS_PWM_CYCLE_ABOVE_10US) {

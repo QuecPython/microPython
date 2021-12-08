@@ -26150,11 +26150,14 @@ STATIC MP_DEFINE_CONST_LV_FUN_OBJ_VAR(mp_lv_bidi_get_visual_pos_obj, 6, mp_lv_bi
  * lvgl extension definition for:
  * void lv_init(void)
  */
- 
+STATIC uint16_t mp_lvgl_init_flag = 0;
 STATIC mp_obj_t mp_lv_init(size_t mp_n_args, const mp_obj_t *mp_args)
 {
-    
+    if(1 == mp_lvgl_init_flag) {
+        lv_deinit();
+    }
     lv_init();
+    mp_lvgl_init_flag = 1;
     return mp_const_none;
 }
 
@@ -32745,6 +32748,34 @@ STATIC lv_fs_res_t lv_fs_drv_t_dir_close_cb_callback(lv_fs_drv_t * arg0, void * 
     return (uint8_t)mp_obj_get_int(callback_result);
 }
 
+STATIC void qpy_lvgl_deinit()
+{
+    
+    if(-1 != helios_lv_handler_task_ref ) {
+        Helios_Thread_Delete(helios_lv_handler_task_ref);
+        helios_lv_handler_task_ref = -1;
+    }
+    if(-1 != helios_lv_tick_task_ref ) {
+        Helios_Thread_Delete(helios_lv_tick_task_ref);
+        helios_lv_tick_task_ref = -1;
+    }
+    if(1 == mp_lvgl_init_flag) {
+        lv_deinit();
+        mp_lvgl_init_flag = 0;
+    }
+    
+}
+
+
+STATIC mp_obj_t mp_lvgl_deinit(size_t mp_n_args, const mp_obj_t *mp_args)
+{
+    QPY_LVGL_LOG("mp lvgl deinit start \n");
+    qpy_lvgl_deinit();
+    QPY_LVGL_LOG("mp lvgl deinit end\n");
+    return mp_const_none;
+}
+
+STATIC MP_DEFINE_CONST_LV_FUN_OBJ_VAR(qpy_module_lvgl_deinit_obj, 0, mp_lvgl_deinit, qpy_lvgl_deinit);
 
 
 /*
@@ -32753,6 +32784,7 @@ STATIC lv_fs_res_t lv_fs_drv_t_dir_close_cb_callback(lv_fs_drv_t * arg0, void * 
 
 STATIC const mp_rom_map_elem_t lvgl_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lvgl) },
+    { MP_ROM_QSTR(MP_QSTR___qpy_module_deinit__),   MP_ROM_PTR(&qpy_module_lvgl_deinit_obj) },
     { MP_ROM_QSTR(MP_QSTR_obj), MP_ROM_PTR(&mp_obj_type) },
     { MP_ROM_QSTR(MP_QSTR_cont), MP_ROM_PTR(&mp_cont_type) },
     { MP_ROM_QSTR(MP_QSTR_btn), MP_ROM_PTR(&mp_btn_type) },

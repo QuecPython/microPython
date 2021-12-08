@@ -119,7 +119,7 @@ int audio_queue_is_full(AUDIO_QUEUE_T *Q)
 void helios_audio_play_queue(void)
 {
 	int i = 0, ret = 0;
-	
+	HELIOS_AUDIO_QUEUE_LOG("---- enter queue. ----\r\n");
 	for (i=QUEUE_NUMS-1; i>=0; i--)
 	{
 		if (!audio_queue_is_empty(&audio.audio_queue[i]))
@@ -138,7 +138,7 @@ void helios_audio_play_queue(void)
 			audio.audio_state = AUDIO_PLAYING;
 			Helios_Mutex_Unlock(audio.queue_mutex);
 			
-			HELIOS_AUDIO_QUEUE_LOG("total nums : %d, data : %s\r\n", nums, data);
+			HELIOS_AUDIO_QUEUE_LOG("###total nums : %d, pri=%d, data: %s\r\n", nums, audio.cur_priority, data);
 			
 			if (audio_type == AUDIO_TTS)
 			{
@@ -189,14 +189,11 @@ void helios_audio_queue_play_task(void *argv)
 				case AUDIO_START_EVENT:
 					break;
 				case AUDIO_STOP_EVENT:
-					#if defined(PLAT_ASR)
-					Helios_TTS_Stop();
-					#endif
-					Helios_Audio_FilePlayStop(); 
-					helios_audio_play_queue();
+					HELIOS_AUDIO_QUEUE_LOG("----AUDIO_STOP_EVENT---\r\n");
 					break;
 				case AUDIO_FINISH_EVENT:
-					HELIOS_AUDIO_QUEUE_LOG("start queue paly...\r\n");
+					HELIOS_AUDIO_QUEUE_LOG("----AUDIO_FINISH_EVENT---\r\n");
+					//HELIOS_AUDIO_QUEUE_LOG("start queue paly...\r\n");
 					helios_audio_play_queue();
 					break;
 				default:

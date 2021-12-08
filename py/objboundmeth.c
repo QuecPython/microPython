@@ -124,6 +124,11 @@ mp_obj_t mp_obj_bound_get_meth(void *bound)
     return ((mp_obj_bound_meth_t *)bound)->meth;
 }
 
+bool mp_obj_is_boundmeth(mp_obj_t o) {
+
+    return mp_obj_is_type(o, &mp_type_bound_meth);
+}
+
 mp_obj_t mp_obj_new_bound_meth(mp_obj_t meth, mp_obj_t self) {
     mp_obj_bound_meth_t *o = m_new_obj(mp_obj_bound_meth_t);
     o->base.type = &mp_type_bound_meth;

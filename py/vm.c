@@ -1374,14 +1374,18 @@ pending_exception_check:
                         MARK_EXC_IP_SELECTIVE();
                         mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
                         if (obj != MP_OBJ_NULL) {
+                            #if MICROPY_KBD_EXCEPTION
                             CHECK_MAINPY_KBD_INTERRUPT_ENTER()
+                            #endif
                             MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
                             if (!mp_sched_num_pending()) {
                                 MP_STATE_VM(sched_state) = MP_SCHED_IDLE;
                             }
                             MICROPY_END_ATOMIC_SECTION(atomic_state);
                             RAISE(obj);
+                            #if MICROPY_KBD_EXCEPTION
                             CHECK_MAINPY_KBD_INTERRUPT_EXIT()
+                            #endif
                         }
                         mp_handle_pending_tail(atomic_state);
                     } else {
@@ -1391,12 +1395,16 @@ pending_exception_check:
                 #else
                 // This is an inlined variant of mp_handle_pending
                 if (MP_STATE_VM(mp_pending_exception) != MP_OBJ_NULL) {
+                    #if MICROPY_KBD_EXCEPTION
                     CHECK_MAINPY_KBD_INTERRUPT_ENTER()
+                    #endif
                     MARK_EXC_IP_SELECTIVE();
                     mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
                     MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
                     RAISE(obj);
+                    #if MICROPY_KBD_EXCEPTION
                     CHECK_MAINPY_KBD_INTERRUPT_EXIT()
+                    #endif
                 }
                 #endif
 

@@ -114,9 +114,9 @@ void app_helios_tts_callback(Helios_TTSENvent event)
 		case HELIOS_TTS_EVT_DEINIT:
 		case HELIOS_TTS_EVT_PLAY_STOP:
 		case HELIOS_TTS_EVT_PLAY_FAILED:
-			Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
-			audio.audio_state = AUDIO_IDLE;
-			Helios_Mutex_Unlock(audio.queue_mutex);
+			//Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
+			//audio.audio_state = AUDIO_IDLE;
+			//Helios_Mutex_Unlock(audio.queue_mutex);
 			break;
 		default:
 			break;
@@ -135,6 +135,11 @@ STATIC mp_obj_t audio_tts_make_new(const mp_obj_type_t *type,
 	
 	if (device < 0 || device > 2) {
 		mp_raise_ValueError("invalid device index, the value of device should be in[0,2]");
+	}
+
+	if (!audio_channel_check(device))
+	{
+		mp_raise_msg_varg(&mp_type_ValueError, "The current platform does not support device %d.", device);
 	}
 	
 	Helios_Audio_SetAudioChannle(device);
@@ -270,6 +275,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 	Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 	if (audio.audio_state == AUDIO_IDLE)
 	{
+		//HELIOS_TTS_LOG("----- TTS 1-----\r\n");
 		audio.cur_priority = new_priority;
 		audio.cur_breakin  = new_breakin;
 		audio.cur_type     = AUDIO_TTS;
@@ -287,24 +293,31 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 				if (!audio_queue_is_full(&audio.audio_queue[new_priority]))
 				{
 					//Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
+					HELIOS_TTS_LOG("----- [TTS-1][%d,%d]-----\r\n", new_priority, audio.cur_priority);
 					uint8_t rear = audio.audio_queue[new_priority].rear;
 					uint8_t front = audio.audio_queue[new_priority].front;
-					
+					//HELIOS_TTS_LOG("[TTS-1][1] front=%d, rear=%d \r\n", front, rear);
 					if (audio.audio_queue[new_priority].audio_data[rear].breakin == 0)
 					{
-						rear = (rear + 1) % QUEUE_SIZE;						
+						rear = (rear + 1) % QUEUE_SIZE;
+						audio.total_nums++;
 					}
 					else if (audio.audio_queue[new_priority].audio_data[rear].breakin == 1)
 					{
-						if (front == 0)
+						if (front == rear)
 						{
-							front = QUEUE_SIZE - 1;
-						}
-						else
-						{
-							front = (front - 1) % QUEUE_SIZE;
+							if (front == 0)
+							{
+								front = QUEUE_SIZE - 1;
+							}
+							else
+							{
+								front = (front - 1) % QUEUE_SIZE;
+							}
+							audio.total_nums++;
 						}
 					}
+					HELIOS_TTS_LOG("[TTS-1][2] front=%d, rear=%d \r\n", front, rear);
 					
 					audio.audio_queue[new_priority].audio_data[rear].audio_type = AUDIO_TTS;
 					audio.audio_queue[new_priority].audio_data[rear].priority = new_priority;
@@ -314,7 +327,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, bufinfo.buf, bufinfo.len);
 					audio.audio_queue[new_priority].rear = rear;
 					audio.audio_queue[new_priority].front = front;
-					audio.total_nums++;
+					
 					Helios_Mutex_Unlock(audio.queue_mutex);
 				}
 				else
@@ -323,13 +336,24 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 					return mp_obj_new_int(-2);
 				}
 
-				uint8_t audio_msg = AUDIO_STOP_EVENT;
-				if (Helios_MsgQ_Put(audio.queue_msg, (const void *)&audio_msg, sizeof(uint8_t), HELIOS_NO_WAIT) == -1)
+				if (audio.cur_type == AUDIO_TTS)
 				{
-					HELIOS_TTS_LOG("send audio msg failed[%u].\r\n", audio_msg);
+					HELIOS_TTS_LOG("---- stop tts play. ----\r\n");
+					#if defined(PLAT_ASR)
+					Helios_TTS_Stop();
+					#endif
+				}
+				else if (audio.cur_type == AUDIO_FILE)
+				{
+					HELIOS_TTS_LOG("---- stop audio file play. ----\r\n");
+					Helios_Audio_FilePlayStop(); 
+				}
+				else
+				{
+					HELIOS_TTS_LOG("Unknown audio type.\r\n");
 					return mp_obj_new_int(-1);
 				}
-				HELIOS_TTS_LOG("send audio stop signal successed[%u].\r\n", audio_msg);
+				
 				return mp_obj_new_int(0);//forrest.liu@20210427 reopen for TTS and Audio_file playing break function correctly
 				
 			}
@@ -339,10 +363,30 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 				{
 					//Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 					uint8_t rear = audio.audio_queue[new_priority].rear;
+					uint8_t front = audio.audio_queue[new_priority].front;
+
+					//HELIOS_TTS_LOG("[TTS-2][1] front=%d, rear=%d \r\n", front, rear);
 					if (audio.audio_queue[new_priority].audio_data[rear].breakin == 0)
 					{
 						rear = (rear + 1) % QUEUE_SIZE;
+						audio.total_nums++;
 					}
+					else if (audio.audio_queue[new_priority].audio_data[rear].breakin == 1)
+					{
+						if (front == rear)
+						{
+							if (front == 0)
+							{
+								front = QUEUE_SIZE - 1;
+							}
+							else
+							{
+								front = (front - 1) % QUEUE_SIZE;
+							}
+							audio.total_nums++;
+						}
+					}
+					HELIOS_TTS_LOG("[TTS-2][2] front=%d, rear=%d \r\n", front, rear);
 					
 					audio.audio_queue[new_priority].audio_data[rear].audio_type = AUDIO_TTS;
 					audio.audio_queue[new_priority].audio_data[rear].priority = new_priority;
@@ -351,7 +395,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 					memset(audio.audio_queue[new_priority].audio_data[rear].data, 0, 500);
 					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, bufinfo.buf, bufinfo.len);
 					audio.audio_queue[new_priority].rear = rear;
-					audio.total_nums++;
+					
 					Helios_Mutex_Unlock(audio.queue_mutex);
 				}
 				else
@@ -359,6 +403,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 					Helios_Mutex_Unlock(audio.queue_mutex);
 					return mp_obj_new_int(-2);
 				}
+				
 				return mp_obj_new_int(1);
 			}
 	    }
@@ -369,23 +414,29 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 				//Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 				uint8_t rear = audio.audio_queue[new_priority].rear;
 				uint8_t front = audio.audio_queue[new_priority].front;
-				
+				HELIOS_TTS_LOG("----- [TTS-3][%d,%d]-----\r\n", new_priority, audio.cur_priority);
+				//HELIOS_TTS_LOG("[TTS-3][1] front=%d, rear=%d \r\n", front, rear);
 				if (audio.audio_queue[new_priority].audio_data[rear].breakin == 0)
 				{
 					rear = (rear + 1) % QUEUE_SIZE;
+					audio.total_nums++;
 				}
 				else if (audio.audio_queue[new_priority].audio_data[rear].breakin == 1)
 				{
-					if (front == 0)
+					if (front == rear)
 					{
-						front = QUEUE_SIZE - 1;
-					}
-					else
-					{
-						front = (front - 1) % QUEUE_SIZE;
+						if (front == 0)
+						{
+							front = QUEUE_SIZE - 1;
+						}
+						else
+						{
+							front = (front - 1) % QUEUE_SIZE;
+						}
+						audio.total_nums++;
 					}
 				}
-			
+				HELIOS_TTS_LOG("[TTS-3][2] front=%d, rear=%d \r\n", front, rear);
 				audio.audio_queue[new_priority].audio_data[rear].audio_type = AUDIO_TTS;
 				audio.audio_queue[new_priority].audio_data[rear].priority = new_priority;
 				audio.audio_queue[new_priority].audio_data[rear].breakin  = new_breakin;
@@ -394,7 +445,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 				strncpy(audio.audio_queue[new_priority].audio_data[rear].data, bufinfo.buf, bufinfo.len);
 				audio.audio_queue[new_priority].rear = rear;
 				audio.audio_queue[new_priority].front = front;
-				audio.total_nums++;
+				
 				Helios_Mutex_Unlock(audio.queue_mutex);
 			}
 			else
@@ -402,6 +453,7 @@ STATIC mp_obj_t audio_tts_play(size_t n_args, const mp_obj_t *args, mp_map_t *kw
 				Helios_Mutex_Unlock(audio.queue_mutex);
 				return mp_obj_new_int(-2);
 			}
+			
 			return mp_obj_new_int(1);
 	    }
 	}

@@ -311,10 +311,6 @@ STATIC mp_obj_t machine_lcd_make_new(const mp_obj_type_t *type, size_t n_args, s
 {
 
    // mp_arg_check_num(n_args, n_kw, 0, 0, true);
-	if(self_lcd != NULL) {
-		m_del_obj(machine_lcd_obj_t,self_lcd);
-		self_lcd = NULL;
-	}
     self_lcd = m_new_obj(machine_lcd_obj_t);
 	memset(self_lcd,0,sizeof(machine_lcd_obj_t));
 	

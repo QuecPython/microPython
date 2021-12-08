@@ -36,7 +36,9 @@ WHEN		WHO			WHAT,WHERE,WHY
 #include "mphalport.h"
 #include "helios_debug.h"
 #include "helios_voicecall.h"
-
+#include "helios_audio.h"
+#include "helios_ringbuf.h"
+#include "callbackdeal.h"
 
 #define QPY_MODVOICECALL_LOG(msg, ...)      custom_log("VOICECALL", msg, ##__VA_ARGS__)
 
@@ -115,6 +117,52 @@ STATIC mp_obj_t qpy_voicecall_fw_set(mp_obj_t mp_obj_reason, mp_obj_t mp_obj_fwm
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(qpy_voice_call_fw_set_obj, qpy_voicecall_fw_set);
 
+
+STATIC mp_obj_t qpy_voicecall_set_channel(mp_obj_t device)
+{
+	int channel = mp_obj_get_int(device);
+
+	if ((channel < 0) || (channel > 2)) 
+	{
+		mp_raise_ValueError("invalid device index, the value of device should be in[0,2]");
+	}
+
+	if (!audio_channel_check(channel))
+	{
+		mp_raise_msg_varg(&mp_type_ValueError, "The current platform does not support device %d.", channel);
+	}
+
+	int ret = Helios_Audio_SetAudioChannle(channel);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_voicecall_set_channel_obj, qpy_voicecall_set_channel);
+
+
+STATIC mp_obj_t qpy_voicecall_set_volume(mp_obj_t volume)
+{
+	int vol = mp_obj_get_int(volume);
+	if (vol < 0 || vol > 11)
+	{
+		mp_raise_ValueError("invalid value, the value of volume should be array between [0,11]");
+		return mp_obj_new_int(-1);
+	}
+	
+	Helios_AudPlayerType type = 2;
+	int ret = Helios_Audio_SetVolume(type, vol);
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_voicecall_set_volume_obj, qpy_voicecall_set_volume);
+
+
+STATIC mp_obj_t qpy_voicecall_get_volume(void)
+{
+	Helios_AudPlayerType type = 2;
+	int vol = Helios_Audio_GetVolume(type);
+	return mp_obj_new_int(vol);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_voicecall_get_volume_obj, qpy_voicecall_get_volume);
+
+
 #if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 STATIC mp_obj_t qpy_voice_call_set_auto_record(size_t n_args, const mp_obj_t *args)
 {
@@ -191,6 +239,140 @@ STATIC mp_obj_t qpy_voice_call_stop_record()
         return mp_obj_new_int(-1);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_voice_call_stop_record_obj, qpy_voice_call_stop_record);
+#endif
+
+static c_callback_t *g_record_callback = NULL;
+
+#if defined(PLAT_ASR)// || defined(PLAT_Unisoc)
+helios_ring_buf_t *VC_stream_ring_buf = NULL;
+#define RECORD_BUFFER_MAX   (uint)10*1024
+
+static int helios_stream_record_cb(char *p_data, int len, HELIOS_VC_AUD_REC_STATE res)
+{
+	/*if(res == HELIOS_VC_AUD_REC_START || res == HELIOS_VC_AUD_REC_FINISHED || res == HELIOS_VC_AUD_REC_DATA) {
+		
+		if(g_record_callback == NULL) {
+			return -1;
+		}
+        
+		mp_obj_t audio_cb[3] = {
+			mp_obj_new_str(p_data,strlen(p_data)),
+			mp_obj_new_int(len),
+			mp_obj_new_int(res),
+		};
+
+		mp_sched_schedule_ex(g_record_callback, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));
+	}
+
+	return 0;*/
+	unsigned int send_len = 0;
+	static int pcm_data_size = 0;
+
+	
+	if(res == HELIOS_VC_AUD_REC_START)
+	{
+		//audio_record_printf("recorder start run");
+		pcm_data_size = 0;
+	}
+	else if(res == HELIOS_VC_AUD_REC_FINISHED)
+	{
+		//audio_record_printf("recorder stop run");		
+		
+	}
+	else if(res == HELIOS_VC_AUD_REC_DATA)
+	{
+		if(len <= 0 || VC_stream_ring_buf == NULL)
+			return -1;
+
+		send_len = helios_rb_write(VC_stream_ring_buf, (unsigned char*)p_data, len);
+
+		pcm_data_size += send_len;
+	}
+
+	if(res == HELIOS_VC_AUD_REC_START || res == HELIOS_VC_AUD_REC_FINISHED || res == HELIOS_VC_AUD_REC_DATA) {
+		
+		if(g_record_callback == NULL) {
+			return -1;
+		}
+		
+		if(res == HELIOS_VC_AUD_REC_FINISHED) send_len = pcm_data_size;
+    #if MICROPY_ENABLE_CALLBACK_DEAL
+		st_CallBack_AudioRecord *record = malloc(sizeof(st_CallBack_AudioRecord));
+	    if(NULL != record) {
+	        record->record_type = RECORE_TYPE_STREAM;
+    	    record->p_data = "stream";
+    	    record->len = send_len;
+    	    record->res = res;
+    	    record->callback = *g_record_callback;
+    	    qpy_send_msg_to_callback_deal_thread(CALLBACK_TYPE_ID_VOICECALL_RECORD, record);
+    	}
+    #else
+        char* p_data_buf = "stream";
+		mp_obj_t audio_cb[3] = {
+			mp_obj_new_str(p_data_buf,strlen(p_data_buf)),
+			mp_obj_new_int(send_len),
+			mp_obj_new_int(res),
+		};
+
+		mp_sched_schedule_ex(g_record_callback, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));
+    #endif
+	}
+
+	return 0;
+}
+
+STATIC mp_obj_t qpy_voice_call_start_record_stream(mp_obj_t mp_obj_recordtype, mp_obj_t mp_obj_recordmode, mp_obj_t mp_obj_cb)
+{
+    int record_type = mp_obj_get_int(mp_obj_recordtype);
+    int record_mode = mp_obj_get_int(mp_obj_recordmode);
+
+    if (record_type < 0 || record_type > 1)
+        mp_raise_ValueError("invalid value.<record_type> should be [0 or 1]");
+    if (record_mode < 0 || record_mode > 2)
+        mp_raise_ValueError("invalid value.<record_mode> should be [0 ~ 2]");
+    
+    Helios_Voicecall_Record_Process_t param = {0};
+    param.record_type = record_type;
+    param.record_mode = record_mode;
+
+	static c_callback_t cb = {0};
+	memset(&cb, 0, sizeof(c_callback_t));
+	g_record_callback = &cb;
+	mp_sched_schedule_callback_register(g_record_callback, mp_obj_cb);
+
+    if(VC_stream_ring_buf == NULL) {
+		VC_stream_ring_buf = helios_rb_create(RECORD_BUFFER_MAX);
+	}
+    
+	HELIOS_VC_ERROR_CODE ret = Helios_VoiceCall_Start_Record_Stream(&param, (helios_vc_cb_on_record)helios_stream_record_cb);
+    if (ret == HELIOS_VC_SUCCESS)
+        return mp_obj_new_int(0);
+    else if (ret == HELIOS_VC_FAILURE)
+        return mp_obj_new_int(-1);
+    else if (ret == HELIOS_VC_NOT_SUPPORT)
+        return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
+    else
+        return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_3(qpy_voice_call_start_record_stream_obj, qpy_voice_call_start_record_stream);
+
+STATIC mp_obj_t qpy_voice_call_record_stream_read(mp_obj_t read_buf, mp_obj_t len)
+{
+	int read_actual_len = 0;
+	//audio_record_obj_t *self = MP_OBJ_TO_PTR(self_in);
+
+    mp_buffer_info_t bufinfo;
+    mp_get_buffer_raise(read_buf, &bufinfo, MP_BUFFER_WRITE);
+	
+	int read_len = mp_obj_get_int(len);
+	if(read_len > 0 && VC_stream_ring_buf) {
+		read_actual_len = helios_rb_read(VC_stream_ring_buf, bufinfo.buf, read_len);
+		return mp_obj_new_int(read_actual_len);
+	}
+	return mp_obj_new_int(-1);
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_voice_call_record_stream_read_obj, qpy_voice_call_record_stream_read);
 #endif
 
 static c_callback_t *g_voice_call_callback = NULL;
@@ -394,7 +576,14 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_voicecall_add_event_handler_obj, qpy_voicec
 
 STATIC mp_obj_t qpy_module_voicecall_deinit(void)
 {
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+    Helios_VoiceCall_Stop_Record();
+#endif
+    Helios_VoiceCall_End(0);
+
 	g_voice_call_callback = NULL;
+    g_record_callback = NULL;
+    
 	Helios_VoiceCallInitStruct info = {0};
 	info.user_cb = NULL;
 	Helios_VoiceCall_Register(&info);
@@ -413,11 +602,19 @@ STATIC const mp_rom_map_elem_t mp_module_voicecall_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_startDtmf),               MP_ROM_PTR(&qpy_voice_call_start_dtmf_obj) },
     { MP_ROM_QSTR(MP_QSTR_setFw),                   MP_ROM_PTR(&qpy_voice_call_fw_set_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setCallback),             MP_ROM_PTR(&qpy_voicecall_add_event_handler_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setChannel),              MP_ROM_PTR(&qpy_voicecall_set_channel_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_setVolume), 				MP_ROM_PTR(&qpy_voicecall_set_volume_obj) },
+    { MP_ROM_QSTR(MP_QSTR_getVolume), 				MP_ROM_PTR(&qpy_voicecall_get_volume_obj) },
 #if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_setAutoRecord),           MP_ROM_PTR(&qpy_voice_call_set_auto_record_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_startRecord),             MP_ROM_PTR(&qpy_voice_call_start_record_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_stopRecord),              MP_ROM_PTR(&qpy_voice_call_stop_record_obj) },
 #endif
+#if defined(PLAT_ASR)// || defined(PLAT_Unisoc)
+	{ MP_ROM_QSTR(MP_QSTR_startRecordStream),       MP_ROM_PTR(&qpy_voice_call_start_record_stream_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_readRecordStream),       MP_ROM_PTR(&qpy_voice_call_record_stream_read_obj) },
+#endif
+
 };
 STATIC MP_DEFINE_CONST_DICT(mp_module_voicecall_globals, mp_module_voicecall_globals_table);
 

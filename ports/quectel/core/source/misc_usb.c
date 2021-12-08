@@ -53,7 +53,8 @@ STATIC mp_obj_t misc_usb_register_cb(mp_obj_t self_in, mp_obj_t usr_callback)
     memset(&cb, 0, sizeof(c_callback_t));
 	g_py_callback = &cb;
 	mp_sched_schedule_callback_register(g_py_callback, usr_callback);
-	
+
+    Helios_USB_DeInit();
 	Helios_USBInitStruct info = {ql_usb_detect_handler};
 	int ret = Helios_USB_Init(&info);
 	return mp_obj_new_int(ret);

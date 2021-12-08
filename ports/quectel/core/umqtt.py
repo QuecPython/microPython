@@ -428,7 +428,7 @@ class MQTTClient(BaseMqtt):
             try:
                 self.sock.close()
                 net_sta = net.getState()
-                if net_sta != -1 and net_sta[1][0] == 1:
+                if net_sta != -1 and ((net_sta[1][0] == 1) or (net_sta[1][0] == 5)):
                     call_state = dataCall.getInfo(1, 0)
                     if (call_state != -1) and (call_state[2][0] == 1):
                         time_info = self.logTime()

@@ -98,7 +98,10 @@ def rmdirs(dir):
     else:
         for item in ls:
             item = dir + '/' + item
-            rmdirs(item)
+            if int(uos.stat(item)[0]) & 0x4000:
+                rmdirs(item)
+            else:
+                uos.remove(item)
         rmdirs(dir)
 
 

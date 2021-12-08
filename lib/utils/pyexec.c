@@ -147,9 +147,11 @@ STATIC int parse_compile_execute(const void *source, mp_parse_input_kind_t input
         if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t *)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
             // at the moment, the value of SystemExit is unused
             ret = pyexec_system_exit;
+        #if MICROPY_KBD_EXCEPTION   
         } else if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t *)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_KeyboardInterrupt))) {
             mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
             ret = RET_KBD_INTERRUPT;
+        #endif
         } else {
             mp_obj_print_exception(&mp_plat_print, MP_OBJ_FROM_PTR(nlr.ret_val));
             ret = 0;
@@ -561,11 +563,8 @@ raw_repl_reset:
 //extern const char mob_model_id[];
 
 int pyexec_friendly_repl(void) {
-#if !defined(PLAT_RDA)
     char mob_model_id[64] = {0};
 	char printf_info[256] = {0};
-#endif
-
     vstr_t line;
     vstr_init(&line, 32);
 
@@ -578,13 +577,12 @@ int pyexec_friendly_repl(void) {
 friendly_repl_reset:
     //mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on " MICROPY_BUILD_DATE "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
 	//mp_hal_stdout_tx_str("MicroPython " MICROPY_GIT_TAG " on "  "; " MICROPY_HW_BOARD_NAME " with " MICROPY_HW_MCU_NAME "\r\n");
-#if !defined(PLAT_RDA)
+
 	#if !defined(PLAT_Qualcomm)
 	Helios_Dev_GetModel((void *)mob_model_id, sizeof(mob_model_id));
 	#endif
 	sprintf(printf_info, "Quecpython %s on %s ; %s with %s \r\n ", MICROPY_GIT_TAG, MICROPY_BUILD_DATE, mob_model_id, MICROPY_HW_MCU_NAME);
 	mp_hal_stdout_tx_str(printf_info);
-#endif
 
 	#if MICROPY_PY_BUILTINS_HELP
     mp_hal_stdout_tx_str("Type \"help()\" for more information.\r\n");
@@ -704,9 +702,13 @@ friendly_repl_reset:
                 }
             }
         }
+        #if MICROPY_KBD_EXCEPTION
         MAINPY_RUNNING_FLAG_SET();
+        #endif
         ret = parse_compile_execute(&line, parse_input_kind, EXEC_FLAG_ALLOW_DEBUGGING | EXEC_FLAG_IS_REPL | EXEC_FLAG_SOURCE_IS_VSTR);
+        #if MICROPY_KBD_EXCEPTION
         MAINPY_RUNNING_FLAG_CLEAR();
+        #endif
         if (ret & PYEXEC_FORCED_EXIT) {
             return ret;
         }
@@ -729,10 +731,7 @@ int pyexec_file_if_exists(const char *filename) {
     if (mp_import_stat(filename) != MP_IMPORT_STAT_FILE) {
         return 1; // success (no file is the same as an empty file executing without fail)
     }
-    if(IS_PYTHON_MAIN_THREAD()) {MAINPY_RUNNING_FLAG_SET();}
-    int ret = pyexec_file(filename);
-    if(IS_PYTHON_MAIN_THREAD()) {MAINPY_RUNNING_FLAG_CLEAR();}
-    return ret;
+    return pyexec_file(filename);
 }
 
 #if MICROPY_MODULE_FROZEN

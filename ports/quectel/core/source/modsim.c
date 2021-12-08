@@ -34,19 +34,50 @@
  *    -1	-	error
  */
 /*=============================================================================*/
-STATIC mp_obj_t qpy_sim_get_imsi(void)
+//可变参函数
+//无入参情况下，默认获取当前卡的信息
+//有入参情况下，获取指定卡的信息
+STATIC mp_obj_t qpy_sim_get_imsi(size_t n_args, const mp_obj_t *args)
 {
 	char imsi_str[19] = {0};
+    int ret = 0;
 
-	int ret = Helios_SIM_GetIMSI(0, (void *)imsi_str, sizeof(imsi_str));
-	if (ret == 0)
-	{
-		return mp_obj_new_str(imsi_str, strlen(imsi_str));
-	}
-
+    if (n_args == 1)
+    {
+        int sim_id = mp_obj_get_int(args[0]);
+        if ((sim_id != 0) && (sim_id != 1))
+    	{
+    		mp_raise_ValueError("invalid value, sim id should be 0/1.");
+    	}
+        
+        ret = Helios_SIM_GetIMSI(sim_id, (void *)imsi_str, sizeof(imsi_str));
+    	if (ret == 0)
+    	{
+    		return mp_obj_new_str(imsi_str, strlen(imsi_str));
+    	}
+    }
+    else
+    {
+    #if defined (PLAT_ASR)
+        HELIOS_SimID_ex helios_simid = HELIOS_SIM_0;
+        HELIOS_SIM_ERRORCODE err = Helios_SIM_Get_Current_Simid(helios_simid);
+        if (err == HELIOS_SIM_NOT_SUPPORT) {
+            ret = Helios_SIM_GetIMSI(0, (void *)imsi_str, sizeof(imsi_str));
+        } else {
+            ret = Helios_SIM_GetIMSI(helios_simid, (void *)imsi_str, sizeof(imsi_str));
+        }
+    #else
+        ret = Helios_SIM_GetIMSI(0, (void *)imsi_str, sizeof(imsi_str));
+    #endif
+        if (ret == 0)
+    	{
+    		return mp_obj_new_str(imsi_str, strlen(imsi_str));
+    	}
+    }
+	
 	return mp_obj_new_int(-1);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_imsi_obj, qpy_sim_get_imsi);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(qpy_sim_get_imsi_obj, 0, 1, qpy_sim_get_imsi);
 
 
 /*=============================================================================*/
@@ -84,6 +115,52 @@ STATIC mp_obj_t qpy_sim_get_iccid(void)
 		return mp_obj_new_str(iccid_str, strlen(iccid_str));
 	}
 
+	/*if (n_args == 1)
+    {
+        int sim_id = mp_obj_get_int(args[0]);
+        if ((sim_id != 0) && (sim_id != 1))
+    	{
+    		mp_raise_ValueError("invalid value, sim id should be 0/1.");
+    	}
+
+    	ret = Helios_SIM_GetCardStatus(0, (Helios_SIM_Status_e *)&status);
+    	if (ret == 0)
+    	{
+    		if (status != 1)
+    		{
+    			return mp_obj_new_int(-1);
+    		}
+    	}
+    	else
+    	{
+    		return mp_obj_new_int(-1);
+    	}
+        
+        ret = Helios_SIM_GetIMSI(sim_id, (void *)imsi_str, sizeof(imsi_str));
+    	if (ret == 0)
+    	{
+    		return mp_obj_new_str(imsi_str, strlen(imsi_str));
+    	}
+    }
+    else
+    {
+    #if defined (PLAT_ASR)
+        HELIOS_SimID_ex helios_simid = HELIOS_SIM_0;
+        HELIOS_SIM_ERRORCODE err = Helios_SIM_Get_Current_Simid(helios_simid);
+        if (err == HELIOS_SIM_NOT_SUPPORT) {
+            ret = Helios_SIM_GetIMSI(0, (void *)imsi_str, sizeof(imsi_str));
+        } else {
+            ret = Helios_SIM_GetIMSI(helios_simid, (void *)imsi_str, sizeof(imsi_str));
+        }
+    #else
+        ret = Helios_SIM_GetIMSI(0, (void *)imsi_str, sizeof(imsi_str));
+    #endif
+        if (ret == 0)
+    	{
+    		return mp_obj_new_str(imsi_str, strlen(imsi_str));
+    	}
+    }*/
+
 	return mp_obj_new_int(-1);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_iccid_obj, qpy_sim_get_iccid);
@@ -101,7 +178,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_iccid_obj, qpy_sim_get_iccid);
 /*=============================================================================*/
 STATIC mp_obj_t qpy_sim_get_phonenumber(void)
 {
-	char phone_number[18] = {0};
+	char phone_number[20+1] = {0};
 
 	int ret = Helios_SIM_GetPhoneNumber(0, (void *)phone_number, sizeof(phone_number));
 	if (ret == 0)
@@ -525,7 +602,9 @@ STATIC mp_obj_t qpy_sim_get_simdet(void)
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_sim_get_simdet_obj, qpy_sim_get_simdet);
 #endif
 static c_callback_t *g_sim_user_callback;
-
+#if defined (PLAT_ASR)
+static c_callback_t * g_switchsim_done_callback;
+#endif
 static void qpy_sim_event_handler(uint8_t sim_id, unsigned int event_id, void *ctx)
 {
 	if(g_sim_user_callback)
@@ -554,6 +633,9 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_sim_add_event_handler_obj, qpy_sim_add_even
 STATIC mp_obj_t qpy_module_sim_deinit(void)
 {
 	g_sim_user_callback = NULL;
+    #if defined (PLAT_ASR)
+    g_switchsim_done_callback = NULL;
+    #endif
 	Helios_SIM_Add_Event_Handler(NULL);
 	return mp_obj_new_int(0);
 }
@@ -595,6 +677,37 @@ STATIC mp_obj_t qpy_sim_genericaccess(const mp_obj_t sim_id, const mp_obj_t cmd)
 	return mp_obj_new_int(-1);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sim_genericaccess_obj, qpy_sim_genericaccess);
+
+//typedef void (*SwitchSimDoneCb)(UINT8);
+
+static void switch_sim_done_callback(uint8_t state)
+{		
+	if (g_switchsim_done_callback)
+	{
+		mp_sched_schedule_ex(g_switchsim_done_callback, mp_obj_new_int(state));
+	}
+}
+
+STATIC mp_obj_t qpy_sim_switch_card(mp_obj_t sim_id, mp_obj_t switchsim_callback)
+{
+    int simid = mp_obj_get_int(sim_id);
+	static c_callback_t cb = {0};
+    memset(&cb, 0, sizeof(c_callback_t));
+	g_switchsim_done_callback = &cb;
+	mp_sched_schedule_callback_register(g_switchsim_done_callback, switchsim_callback);
+	int ret = Helios_SIM_Switch_Card(simid, switch_sim_done_callback);
+	if (ret == HELIOS_SIM_GENERIC_FAILURE)
+	{
+		ret = -1;
+	}
+    else if (ret == HELIOS_SIM_NOT_SUPPORT)
+	{
+		return mp_obj_new_str("NOT SUPPORT", strlen("NOT SUPPORT"));
+	}
+	
+	return mp_obj_new_int(ret);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_sim_switch_card_obj, qpy_sim_switch_card);
 #endif
 
 STATIC const mp_rom_map_elem_t mp_module_sim_globals_table[] = {
@@ -612,6 +725,7 @@ STATIC const mp_rom_map_elem_t mp_module_sim_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_readPhonebook),   MP_ROM_PTR(&qpy_sim_read_phonebook_record_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_writePhonebook),  MP_ROM_PTR(&qpy_sim_write_phonebook_record_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_genericAccess),  MP_ROM_PTR(&qpy_sim_genericaccess_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_switchCard),      MP_ROM_PTR(&qpy_sim_switch_card_obj) },
 #endif
 #if !defined (PLAT_RDA)
     { MP_ROM_QSTR(MP_QSTR_setSimDet),       MP_ROM_PTR(&qpy_sim_set_simdet_obj) },
