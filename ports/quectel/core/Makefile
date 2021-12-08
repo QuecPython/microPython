@@ -294,7 +294,10 @@ SRC_QSTR += source/quecpython.c \
 			source/modlpm.c \
 			source/machine_extint.c \
 			source/machine_hw_spi.c \
-			source/machine_iic.c
+			source/machine_iic.c \
+			source/machine_iic_simulation.c \
+			source/callbackdeal.c \
+			source/devreport.c
 else
 SRC_QSTR += source/quecpython.c \
 			source/moduos.c \
@@ -319,16 +322,18 @@ SRC_QSTR += source/quecpython.c \
             source/modsim.c \
             source/modnet.c \
 			source/machine_iic.c \
+			source/machine_iic_simulation.c \
 			source/moddev.c \
 			source/misc_powerkey.c \
-			source/modlpm.c
+			source/modlpm.c \
+			source/callbackdeal.c \
+			source/devreport.c
 
 endif
 			
 ifeq ($(strip $(PLAT)),ASR)
 SRC_QSTR += source/modsecuredata.c \
 			source/misc_usbnet.c \
-			source/machine_keypad.c \
 			source/modslipif.c \
 			source/modethernet.c \
 			source/modethernet_dm9051.c
@@ -338,7 +343,8 @@ ifeq ($(strip $(PLAT)),RDA)
 SRC_QSTR += source/modnb.c \
             source/nb_oc.c \
 			source/nb_aep.c \
-			source/nb_onenet.c
+			source/nb_onenet.c \
+			source/misc_temperature.c
 endif
 
 ifneq ($(strip $(PLAT)),RDA)
@@ -356,12 +362,14 @@ SRC_QSTR += source/modsms.c \
 			source/modsensor.c \
             source/misc_usb.c \
             source/misc_pwm.c \
-			source/modvoicecall.c
+            source/modwifilocator.c \
+			source/modvoicecall.c \
+			source/machine_keypad.c
 
 #quecthing
 ifeq ($(CONFIG_QUECTHING), y)
 ifeq ($(strip $(PLAT)),$(filter $(PLAT),ASR Unisoc))
-SRC_QSTR += source/modquecIot.c
+SRC_QSTR += $(ROOT)/components/quecsdk/cloud/python/modquecIot.c
 endif
 endif
 
@@ -402,7 +410,8 @@ endif
 endif
 
 ifeq ($(strip $(PLAT)),Unisoc)
-SRC_QSTR += source/modgnss.c
+SRC_QSTR += source/modgnss.c \
+			source/misc_usbnet.c
 endif
 
 ifeq ($(CONFIG_BT), y)
@@ -733,6 +742,7 @@ $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/sys_bus.mpy \
 						$(BUILD)/event_message.mpy \
 						$(BUILD)/hls.mpy \
+						$(BUILD)/wifilocator.mpy \
 						$(BUILD)/bak_util.mpy \
 						$(HEADER_BUILD)/qstrdefs.generated.h
 	@$(ECHO) "MISC freezing bytecode"
@@ -765,6 +775,7 @@ $(BUILD)/_frozen_mpy.c: \
 						$(BUILD)/sys_bus.mpy \
 						$(BUILD)/event_message.mpy \
 						$(BUILD)/hls.mpy \
+                                                $(BUILD)/wifilocator.mpy \
 						$(BUILD)/bak_util.mpy \
 						> $@
 endif

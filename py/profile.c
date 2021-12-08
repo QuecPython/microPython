@@ -300,11 +300,15 @@ STATIC mp_obj_t mp_prof_callback_invoke(mp_obj_t callback, prof_callback_args_t 
     mp_prof_is_executing = false;
 
     if (MP_STATE_VM(mp_pending_exception) != MP_OBJ_NULL) {
+        #if MICROPY_KBD_EXCEPTION
         CHECK_MAINPY_KBD_INTERRUPT_ENTER()
+        #endif
         mp_obj_t obj = MP_STATE_VM(mp_pending_exception);
         MP_STATE_VM(mp_pending_exception) = MP_OBJ_NULL;
         nlr_raise(obj);
+        #if MICROPY_KBD_EXCEPTION
         CHECK_MAINPY_KBD_INTERRUPT_EXIT()
+        #endif
     }
     return top;
 }

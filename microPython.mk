@@ -56,12 +56,15 @@ $(NAME)_SRCS = \
     ports/quectel/core/source/modsim.c \
 	ports/quectel/core/source/modnet.c \
 	ports/quectel/core/source/machine_iic.c \
+	ports/quectel/core/source/machine_iic_simulation.c \
 	ports/quectel/core/source/modfota.c \
 	ports/quectel/core/source/moddev.c \
 	ports/quectel/core/source/modostimer.c \
 	ports/quectel/core/source/machine_timer.c \
 	ports/quectel/core/source/misc_powerkey.c \
 	ports/quectel/core/source/modlpm.c \
+	ports/quectel/core/source/devreport.c \
+	ports/quectel/core/source/callbackdeal.c \
 	py/argcheck.c \
 	py/asmarm.c \
 	py/asmbase.c \
@@ -199,7 +202,8 @@ $(NAME)_SRCS += \
 	ports/quectel/core/source/modnb.c \
 	ports/quectel/core/source/nb_oc.c \
 	ports/quectel/core/source/nb_aep.c \
-	ports/quectel/core/source/nb_onenet.c 
+	ports/quectel/core/source/nb_onenet.c \
+	ports/quectel/core/source/misc_temperature.c 
 endif
 
 ifneq ($(strip $(PLAT)),RDA)
@@ -220,7 +224,9 @@ $(NAME)_SRCS += \
 	ports/quectel/core/source/audio_record.c \
     ports/quectel/core/source/misc_pwm.c \
     ports/quectel/core/source/misc_usb.c \
-	ports/quectel/core/source/audio_queue.c \
+    ports/quectel/core/source/audio_queue.c \
+    ports/quectel/core/source/modwifilocator.c \
+    ports/quectel/core/source/machine_keypad.c
 
 ifeq ($(strip $(PLAT)),ASR)
 $(NAME)_SRCS += \
@@ -228,7 +234,6 @@ $(NAME)_SRCS += \
 	ports/quectel/core/source/misc_usbnet.c \
 	ports/quectel/core/source/modslipif.c \
 	ports/quectel/core/source/modethernet.c \
-	ports/quectel/core/source/machine_keypad.c \
 	ports/quectel/core/source/modethernet_dm9051.c
 endif
 
@@ -237,7 +242,8 @@ endif
 
 ifeq ($(strip $(PLAT)),Unisoc)
 $(NAME)_SRCS += \
-	ports/quectel/core/source/modgnss.c
+	ports/quectel/core/source/modgnss.c \
+	ports/quectel/core/source/misc_usbnet.c
 endif
 
 ifeq ($(CONFIG_TTS), y)
@@ -390,7 +396,8 @@ endif
 
 ifeq ($(CONFIG_QUECTHING), y)
 ifeq ($(strip $(PLAT)),$(filter $(PLAT),ASR Unisoc))
-$(NAME)_SRCS += ports/quectel/core/source/modquecIot.c
+#$(NAME)_SRCS += ports/quectel/core/source/modquecIot.c
+$(NAME)_SRCS += ../../components/quecsdk/cloud/python/modquecIot.c
 $(NAME)_INCS += ../../components/quecsdk
 $(NAME)_COMPONENTS += components/quecsdk
 endif

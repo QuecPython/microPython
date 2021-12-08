@@ -237,7 +237,7 @@ STATIC mp_obj_t machine_uart_any(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_uart_any_obj, machine_uart_any);
 
-#if defined (PLAT_ASR)
+#if defined (PLAT_ASR) || defined (PLAT_Unisoc)
 STATIC mp_obj_t machine_uart_485_control(mp_obj_t self_in,mp_obj_t gpio_n,mp_obj_t direc) {
 	int ret = -1;
     machine_uart_obj_t *self = MP_OBJ_TO_PTR(self_in);
@@ -327,10 +327,12 @@ STATIC const mp_rom_map_elem_t machine_uart_locals_dict_table[] = {
 #if defined(PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_UART1), MP_ROM_INT(HELIOS_UART1) },
 #endif
-#if defined (PLAT_ASR)
+#if defined (PLAT_ASR) || defined (PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_control_485), MP_ROM_PTR(&machine_uart_485_control_obj) },
-    { MP_ROM_QSTR(MP_QSTR_UART0), MP_ROM_INT(HELIOS_UART0) },    
 	PLAT_GPIO_DEF(PLAT_GPIO_NUM),
+#endif
+#if defined (PLAT_ASR)
+    { MP_ROM_QSTR(MP_QSTR_UART0), MP_ROM_INT(HELIOS_UART0) },
 #endif
 
 #if !defined(PLAT_RDA)

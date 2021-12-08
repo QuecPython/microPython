@@ -24,6 +24,7 @@
 
 #include "helios_extint.h"
 #include "helios_debug.h"
+#include "callbackdeal.h"
 
 #define EXTINT_LOG(msg, ...)      custom_log("extint", msg, ##__VA_ARGS__)
 
@@ -62,22 +63,39 @@ enum {
 ** Jayceon-20200908:
 ** Replace function mp_call_function_1_protected() with mp_sched_schedule_ex to slove the dump problem.
 */
+#if MICROPY_ENABLE_CALLBACK_DEAL
+#define EXTINT_CALLBACK_OP(X, edge)     do{                                                                                     \
+                                            st_CallBack_Extint *extint = malloc(sizeof(st_CallBack_Extint));                    \
+                                    	    if(NULL != extint) {                                                                \
+                                        	    extint->pin_no = X;                                                             \
+                                        	    extint->edge = edge;                                                            \
+                                        	    extint->callback = extint_obj[X]->callback;                                     \
+                                        	    qpy_send_msg_to_callback_deal_thread(CALLBACK_TYPE_ID_EXTINT, extint);          \
+                                        	}                                                                                   \
+                                        }while(0)
+#else
+#define EXTINT_CALLBACK_OP(X, edge)     do{                                                                                     \
+                                            mp_obj_t extint_list[2] = {                                                         \
+                                                mp_obj_new_int(X),                                                              \
+                                                mp_obj_new_int(edge),                                                           \
+                                            };                                                                                  \
+                                            mp_sched_schedule_ex(&extint_obj[X]->callback,  mp_obj_new_list(2, extint_list));   \
+                                        }while(0)
+
+#endif
+
 #define HANDLER_FUN(X) 															            \
-static void handler##X(void)													            \
+static void handler##X(void)	                                                            \
 {	                                                                                        \
 	int edge = HELIOS_EXTINT_RISING;											            \
 	if(Helios_GPIO_GetLevel((Helios_GPIONum)X) == 0) 						                \
 		{edge = HELIOS_EXTINT_FALLING; extint_count[X].falling_count++;}		            \
 	else {extint_count[X].rising_count++;}									                \
-	if (extint_obj[X]->callback.cb != mp_const_none &&                                       \
+	if (extint_obj[X]->callback.cb != mp_const_none &&                                      \
 	            ((mp_sched_num_pending() < MICROPY_SCHEDULER_DEPTH))) {			            \
-		mp_obj_t extint_list[2] = {												            \
-				mp_obj_new_int(X),												            \
-				mp_obj_new_int(edge),											            \
-			};																	            \
-		mp_sched_schedule_ex(&extint_obj[X]->callback,  mp_obj_new_list(2, extint_list));	\
+		        EXTINT_CALLBACK_OP(X, edge);                                                \
 	}																			            \
-	Helios_ExtInt_Enable(extint_obj[X]->line);                                               \
+	Helios_ExtInt_Enable(extint_obj[X]->line);                                              \
 } 
 
 
@@ -123,6 +141,16 @@ HANDLER_FUN(38)
 HANDLER_FUN(39)
 HANDLER_FUN(40)
 HANDLER_FUN(41)
+HANDLER_FUN(42)
+HANDLER_FUN(43)
+HANDLER_FUN(44)
+HANDLER_FUN(45)
+HANDLER_FUN(46)
+HANDLER_FUN(47)
+HANDLER_FUN(48)
+HANDLER_FUN(49)
+HANDLER_FUN(50)
+
 
 
 eint_handler_t eint_handler[HELIOS_GPIOMAX] = {

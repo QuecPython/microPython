@@ -418,7 +418,10 @@ STATIC mp_obj_t qpy_net_get_mnc(void)
    	mp_obj_t mnc_list = mp_obj_new_list(0, NULL);
 	Helios_NwCellInfoStruct info = {0};
 	
+	MP_THREAD_GIL_EXIT();
 	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
     if (ret == 0)
     {
 		if (info.gsm_info_num > 0)
@@ -452,6 +455,56 @@ STATIC mp_obj_t qpy_net_get_mnc(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_mnc_obj, qpy_net_get_mnc);
 
+STATIC mp_obj_t qpy_net_get_mnc_servingcell(void)
+{
+	int ret = 0;
+	int i = 0;
+	Helios_NwCellInfoStruct info = {0};
+	
+	MP_THREAD_GIL_EXIT();
+	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
+    if (ret == 0)
+    {
+		if (info.gsm_info_num > 0)
+		{
+			for (i=0; i<info.gsm_info_num; i++)
+			{					
+				if (info.gsm_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.gsm_info[i].mnc);
+                }            
+			}
+		}
+
+		if (info.umts_info_num > 0)
+		{
+			for (i=0; i<info.umts_info_num; i++)
+			{					
+				if (info.umts_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.umts_info[i].mnc);
+                } 
+			}
+		}
+
+		if (info.lte_info_num > 0)
+		{
+			for (i=0; i<info.lte_info_num; i++)
+			{					
+				if (info.lte_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.lte_info[i].mnc);
+                }
+			}
+		}
+	}
+
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_mnc_servingcell_obj, qpy_net_get_mnc_servingcell);
+
 
 /*=============================================================================*/
 /* FUNCTION: qpy_net_get_mcc                                                   */
@@ -469,8 +522,11 @@ STATIC mp_obj_t qpy_net_get_mcc(void)
 	int i = 0;
    	mp_obj_t mcc_list = mp_obj_new_list(0, NULL);
 	Helios_NwCellInfoStruct info = {0};
-	
+
+	MP_THREAD_GIL_EXIT();
 	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
     if (ret == 0)
     {
 		if (info.gsm_info_num > 0)
@@ -504,6 +560,56 @@ STATIC mp_obj_t qpy_net_get_mcc(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_mcc_obj, qpy_net_get_mcc);
 
+STATIC mp_obj_t qpy_net_get_mcc_servingcell(void)
+{
+	int ret = 0;
+	int i = 0;
+	Helios_NwCellInfoStruct info = {0};
+    
+	MP_THREAD_GIL_EXIT();
+	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
+    if (ret == 0)
+    {
+		if (info.gsm_info_num > 0)
+		{
+			for (i=0; i<info.gsm_info_num; i++)
+			{					
+				if (info.gsm_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.gsm_info[i].mcc);
+                }
+			}
+		}
+
+		if (info.umts_info_num > 0)
+		{
+			for (i=0; i<info.umts_info_num; i++)
+			{					
+				if (info.umts_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.umts_info[i].mcc);
+                }
+			}
+		}
+
+		if (info.lte_info_num > 0)
+		{
+			for (i=0; i<info.lte_info_num; i++)
+			{					
+				if (info.lte_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.lte_info[i].mcc);
+                }
+			}
+		}
+	}
+
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_mcc_servingcell_obj, qpy_net_get_mcc_servingcell);
+
 
 /*=============================================================================*/
 /* FUNCTION: qpy_net_get_lac                                                   */
@@ -522,7 +628,10 @@ STATIC mp_obj_t qpy_net_get_lac(void)
    	mp_obj_t lac_list = mp_obj_new_list(0, NULL);
 	Helios_NwCellInfoStruct info = {0};
 	
+	MP_THREAD_GIL_EXIT();
 	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
     if (ret == 0)
     {
 		if (info.gsm_info_num > 0)
@@ -556,6 +665,56 @@ STATIC mp_obj_t qpy_net_get_lac(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_lac_obj, qpy_net_get_lac);
 
+STATIC mp_obj_t qpy_net_get_lac_servingcell(void)
+{
+	int ret = 0;
+	int i = 0;
+	Helios_NwCellInfoStruct info = {0};
+	
+	MP_THREAD_GIL_EXIT();
+	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
+    if (ret == 0)
+    {
+		if (info.gsm_info_num > 0)
+		{
+			for (i=0; i<info.gsm_info_num; i++)
+			{
+				if (info.gsm_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.gsm_info[i].lac);
+                }
+			}
+		}
+		
+		if (info.umts_info_num > 0)
+		{
+			for (i=0; i<info.umts_info_num; i++)
+			{
+				if (info.umts_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.umts_info[i].lac);
+                }
+			}
+		}
+		
+		if (info.lte_info_num > 0)
+		{
+			for (i=0; i<info.lte_info_num; i++)
+			{
+				if (info.lte_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.lte_info[i].tac);
+                }
+			}
+		}
+	}
+
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_lac_servingcell_obj, qpy_net_get_lac_servingcell);
+
 /*=============================================================================*/
 /* FUNCTION: qpy_net_get_cid                                                   */
 /*=============================================================================*/
@@ -573,7 +732,10 @@ STATIC mp_obj_t qpy_net_get_cid(void)
    	mp_obj_t cid_list = mp_obj_new_list(0, NULL);
 	Helios_NwCellInfoStruct info = {0};
 	
+	MP_THREAD_GIL_EXIT();
 	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
     if (ret == 0)
     {
 		if (info.gsm_info_num > 0)
@@ -607,6 +769,55 @@ STATIC mp_obj_t qpy_net_get_cid(void)
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_cid_obj, qpy_net_get_cid);
 
+STATIC mp_obj_t qpy_net_get_cid_servingcell(void)
+{
+	int ret = 0;
+	int i = 0;
+	Helios_NwCellInfoStruct info = {0};
+	
+	MP_THREAD_GIL_EXIT();
+	ret = Helios_Nw_GetCellInfo(0, &info);
+    MP_THREAD_GIL_ENTER();
+    
+    if (ret == 0)
+    {
+		if (info.gsm_info_num > 0)
+		{
+			for (i=0; i<info.gsm_info_num; i++)
+			{
+				if (info.gsm_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.gsm_info[i].cid);
+                }
+			}
+		}
+		
+		if (info.umts_info_num > 0)
+		{
+			for (i=0; i<info.umts_info_num; i++)
+			{
+				if (info.umts_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.umts_info[i].cid);
+                }
+			}
+		}
+		
+		if (info.lte_info_num > 0)
+		{
+			for (i=0; i<info.lte_info_num; i++)
+			{
+				if (info.lte_info[i].flag == 0) //serving cell
+                {
+                    return mp_obj_new_int(info.lte_info[i].cid);
+                }
+			}
+		}
+	}
+
+	return mp_obj_new_int(-1);
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(qpy_net_get_cid_servingcell_obj, qpy_net_get_cid_servingcell);
 
 /*=============================================================================*/
 /* FUNCTION: qpy_net_get_cell_info                                             */
@@ -630,6 +841,7 @@ STATIC mp_obj_t qpy_net_get_cell_info(void)
     MP_THREAD_GIL_EXIT();
 	ret = Helios_Nw_GetCellInfo(0, &info);
     MP_THREAD_GIL_ENTER();
+    
     if (ret == 0)
     {
 		if (info.gsm_info_num > 0)
@@ -781,7 +993,7 @@ STATIC mp_obj_t qpy_net_set_apn(mp_obj_t apn, mp_obj_t simid)
 	}
 	return mp_obj_new_int(-1);
 #else
-    return mp_obj_new_int(-1);
+    return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
 #endif
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_2(qpy_net_set_apn_obj, qpy_net_set_apn);
@@ -805,7 +1017,7 @@ STATIC mp_obj_t qpy_net_get_apn(mp_obj_t simid)
 	}
 	return mp_obj_new_int(-1);
 #else
-        return mp_obj_new_int(-1);
+    return mp_obj_new_str("NOT SUPPORT",strlen("NOT SUPPORT"));
 #endif
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(qpy_net_get_apn_obj, qpy_net_get_apn);
@@ -926,8 +1138,16 @@ STATIC const mp_rom_map_elem_t net_module_globals_table[] = {
 #if !defined (PLAT_RDA)
 	{ MP_ROM_QSTR(MP_QSTR_setCallback), 	MP_ROM_PTR(&qpy_net_add_event_handler_obj) 	},
 #endif
+
+//#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
     { MP_ROM_QSTR(MP_QSTR_setApn), 	MP_ROM_PTR(&qpy_net_set_apn_obj) 	},
     { MP_ROM_QSTR(MP_QSTR_getApn), 	MP_ROM_PTR(&qpy_net_get_apn_obj) 	},
+//#endif
+
+    { MP_ROM_QSTR(MP_QSTR_getServingCi),    MP_ROM_PTR(&qpy_net_get_cid_servingcell_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getServingLac), 	MP_ROM_PTR(&qpy_net_get_lac_servingcell_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getServingMnc), 	MP_ROM_PTR(&qpy_net_get_mnc_servingcell_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_getServingMcc), 	MP_ROM_PTR(&qpy_net_get_mcc_servingcell_obj) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(net_module_globals, net_module_globals_table);

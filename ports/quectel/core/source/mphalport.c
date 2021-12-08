@@ -36,15 +36,20 @@
 #include "helios.h"
 #include "helios_os.h"
 #include "helios_rtc.h"
-
+#include "stackctrl.h"
+#include "runtime.h"
 
 STATIC uint8_t stdin_ringbuf_array[256];
 ringbuf_t stdin_ringbuf = {stdin_ringbuf_array, sizeof(stdin_ringbuf_array), 0, 0};
 
 //static Helios_Sem_t mp_hal_stdin_sem = 0;
+#define QUECPYTHON_MAIN_THREAD_SLEEP_DEAL_MSG_MAX_NUM (2 * MICROPY_SCHEDULER_DEPTH)
 #if !defined(PLAT_RDA)
-#define QUECPYTHON_CALLBACK_MSG_MAX_NUM (2 * MICROPY_SCHEDULER_DEPTH)
-static Helios_MsgQ_t quecpython_callback_deal_queue = 0;
+static Helios_MsgQ_t quecpython_main_thread_sleep_deal_queue = 0;
+static int main_thread_sleep_flag = 0;
+#define MAIN_THREAD_SLEEP_ENTER()   (main_thread_sleep_flag = 1)
+#define MAIN_THREAD_SLEEP_EXIT()    (main_thread_sleep_flag = 0)
+#define IS_MAIN_THREAD_IN_SLEEP()   (1 == main_thread_sleep_flag)
 #endif
 
 //forrest.liu@20210809 add for quecpython task repl using waiting msg
@@ -251,31 +256,33 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
 }
 
 #if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
-void quecpython_callback_deal_queue_create(void)
+void quecpython_main_thread_sleep_deal_queue_create(void)
 {
-	quecpython_callback_deal_queue = Helios_MsgQ_Create(QUECPYTHON_CALLBACK_MSG_MAX_NUM, sizeof(mp_uint_t));
+	quecpython_main_thread_sleep_deal_queue = Helios_MsgQ_Create(QUECPYTHON_MAIN_THREAD_SLEEP_DEAL_MSG_MAX_NUM, sizeof(mp_uint_t));
 }
 
 //Added by Freddy @20210520 发送消息至sleep的queue
 void quecpython_send_msg_to_sleep_func(void)
 {
 	mp_uint_t msg = 0;
-	if(0 != quecpython_callback_deal_queue)
+	if(0 != quecpython_main_thread_sleep_deal_queue && IS_MAIN_THREAD_IN_SLEEP())
 	{
-		Helios_MsgQ_Put(quecpython_callback_deal_queue, (const void*)(&msg), sizeof(mp_uint_t), 0);
+		Helios_MsgQ_Put(quecpython_main_thread_sleep_deal_queue, (const void*)(&msg), sizeof(mp_uint_t), 0);
 	}
 }
 
-//Added by Freddy @20210520 sleep接口循环调用此接口达到sleep的目的，
-//当有callback要执行时，给此queue发消息，即可立即退�?
+//Added by Freddy @20210520 sleep接口循环调用此接口达到sleep的目的,
+//当有callback要执行时, 给此queue发消息, 即可立即退出
 mp_uint_t quecpython_sleep_deal_fun(mp_uint_t ms)
 {
-	if(quecpython_callback_deal_queue)
+	if(quecpython_main_thread_sleep_deal_queue)
 	{
 		mp_uint_t dt;
 		mp_uint_t t0 = mp_hal_ticks_us();
 		mp_uint_t msg;
-		int ret = Helios_MsgQ_Get(quecpython_callback_deal_queue, (mp_uint_t*)&msg, sizeof(msg), ms);
+		MAIN_THREAD_SLEEP_ENTER();
+		int ret = Helios_MsgQ_Get(quecpython_main_thread_sleep_deal_queue, (mp_uint_t*)&msg, sizeof(msg), ms);
+		MAIN_THREAD_SLEEP_EXIT();
 		if(ret < 0)
 		{
 			return ms;

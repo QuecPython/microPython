@@ -28,11 +28,13 @@ typedef struct _audio_obj_t {
 
 #define HELIOS_AUDIO_LOG(fmt, ...) custom_log(audio_audio, fmt, ##__VA_ARGS__)
 
+#define AUDIO_CHANNEL_MAX 3
 extern const mp_obj_type_t audio_audio_type;
 
 static c_callback_t *g_audio_callback;
 static c_callback_t *g_audio_speakerpa_callback;
 static int g_gpio_pa = -1;
+static audio_obj_t *audio_obj[AUDIO_CHANNEL_MAX] = {NULL};
 
 STATIC void delay_us(unsigned int us)
 {
@@ -164,7 +166,7 @@ int audio_play_callback(char *ptr, size_t lens, Helios_EnumAudPlayerState state)
 		Helios_Mutex_Unlock(audio.queue_mutex);
 	}
 	
-	if ((g_audio_callback != NULL) && (audio_state != AUDIO_IDLE))
+	if ((g_audio_callback != NULL) /*&& (audio_state != AUDIO_IDLE)*/)
 	{
 		HELIOS_AUDIO_LOG("[Audio] callback start.\r\n");
 		mp_sched_schedule_ex(g_audio_callback, mp_obj_new_int(audio_event));
@@ -214,8 +216,16 @@ STATIC mp_obj_t audio_make_new(const mp_obj_type_t *type, size_t n_args, size_t 
 	if (device < 0 || device > 2) {
 		mp_raise_ValueError("invalid device index, the value of device should be in[0,2]");
 	}
-	
-    audio_obj_t *self = m_new_obj_with_finaliser(audio_obj_t);
+
+	if (!audio_channel_check(device))
+	{
+		mp_raise_msg_varg(&mp_type_ValueError, "The current platform does not support device %d.", device);
+	}
+	if(audio_obj[device] == NULL)
+	{
+        audio_obj[device] = m_new_obj_with_finaliser(audio_obj_t);
+    }
+    audio_obj_t *self = audio_obj[device];
     self->base.type = &audio_audio_type;
 	self->device = device;
 	//self->inited = 0;
@@ -317,6 +327,7 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 	Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 	if (audio.audio_state == AUDIO_IDLE)
 	{
+		//HELIOS_AUDIO_LOG("----- audio 1-----\r\n");
 		audio.cur_priority = new_priority;
 		audio.cur_breakin  = new_breakin;
 		audio.cur_type     = AUDIO_FILE;
@@ -334,22 +345,28 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 				if (!audio_queue_is_full(&audio.audio_queue[new_priority]))
 				{
 					//Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
+					HELIOS_AUDIO_LOG("----- audio 2[%d,%d]-----\r\n", new_priority, audio.cur_priority);
 					uint8_t rear = audio.audio_queue[new_priority].rear;
 					uint8_t front = audio.audio_queue[new_priority].front;
 					
 					if (audio.audio_queue[new_priority].audio_data[rear].breakin == 0)
 					{
 						rear = (rear + 1) % QUEUE_SIZE;
+						audio.total_nums++;
 					}
 					else if (audio.audio_queue[new_priority].audio_data[rear].breakin == 1)
 					{
-						if (front == 0)
+						if (front == rear)
 						{
-							front = QUEUE_SIZE - 1;
-						}
-						else
-						{
-							front = (front - 1) % QUEUE_SIZE;
+							if (front == 0)
+							{
+								front = QUEUE_SIZE - 1;
+							}
+							else
+							{
+								front = (front - 1) % QUEUE_SIZE;
+							}
+							audio.total_nums++;
 						}
 					}
 				
@@ -361,7 +378,7 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, new_data, strlen(new_data));
 					audio.audio_queue[new_priority].rear = rear;
 					audio.audio_queue[new_priority].front = front;
-					audio.total_nums++;
+					
 					Helios_Mutex_Unlock(audio.queue_mutex);
 				}
 				else
@@ -369,14 +386,25 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 					Helios_Mutex_Unlock(audio.queue_mutex);
 					return mp_obj_new_int(-2);
 				}
-
-				uint8_t audio_msg = AUDIO_STOP_EVENT;
-				if (Helios_MsgQ_Put(audio.queue_msg, (const void *)&audio_msg, sizeof(uint8_t), HELIOS_NO_WAIT) == -1)
+		
+				if (audio.cur_type == AUDIO_TTS)
 				{
-					HELIOS_AUDIO_LOG("send audio msg failed.\r\n");
+					HELIOS_AUDIO_LOG("---- stop tts play. ----\r\n");
+					#if defined(PLAT_ASR)
+					Helios_TTS_Stop();
+					#endif
+				}
+				else if (audio.cur_type == AUDIO_FILE)
+				{
+					HELIOS_AUDIO_LOG("---- stop audio file play. ----\r\n");
+					Helios_Audio_FilePlayStop(); 
+				}
+				else
+				{
+					HELIOS_AUDIO_LOG("Unknown audio type.\r\n");
 					return mp_obj_new_int(-1);
 				}
-				HELIOS_AUDIO_LOG("send audio stop signal successed.\r\n");
+				
 				return mp_obj_new_int(0);
 			}
 			else if (audio.cur_breakin == 0)
@@ -385,9 +413,27 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 				{
 					//Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 					uint8_t rear = audio.audio_queue[new_priority].rear;
+					uint8_t front = audio.audio_queue[new_priority].front;
+					
 					if (audio.audio_queue[new_priority].audio_data[rear].breakin == 0)
 					{
 						rear = (rear + 1) % QUEUE_SIZE;
+						audio.total_nums++;
+					}
+					else if (audio.audio_queue[new_priority].audio_data[rear].breakin == 1)
+					{
+						if (front == rear)
+						{
+							if (front == 0)
+							{
+								front = QUEUE_SIZE - 1;
+							}
+							else
+							{
+								front = (front - 1) % QUEUE_SIZE;
+							}
+							audio.total_nums++;
+						}
 					}
 				
 					audio.audio_queue[new_priority].audio_data[rear].audio_type = AUDIO_FILE;
@@ -397,7 +443,7 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 					memset(audio.audio_queue[new_priority].audio_data[rear].data, 0, 500);
 					strncpy(audio.audio_queue[new_priority].audio_data[rear].data, new_data, strlen(new_data));
 					audio.audio_queue[new_priority].rear = rear;
-					audio.total_nums++;
+					
 					Helios_Mutex_Unlock(audio.queue_mutex);
 				}
 				else
@@ -405,6 +451,7 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 					Helios_Mutex_Unlock(audio.queue_mutex);
 					return mp_obj_new_int(-2);
 				}
+				
 				return mp_obj_new_int(1);
 			}
 	    }
@@ -419,16 +466,21 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 				if (audio.audio_queue[new_priority].audio_data[rear].breakin == 0)
 				{
 					rear = (rear + 1) % QUEUE_SIZE;
+					audio.total_nums++;
 				}
 				else if (audio.audio_queue[new_priority].audio_data[rear].breakin == 1)
 				{
-					if (front == 0)
+					if (front == rear)
 					{
-						front = QUEUE_SIZE - 1;
-					}
-					else
-					{
-						front = (front - 1) % QUEUE_SIZE;
+						if (front == 0)
+						{
+							front = QUEUE_SIZE - 1;
+						}
+						else
+						{
+							front = (front - 1) % QUEUE_SIZE;
+						}
+						audio.total_nums++;
 					}
 				}
 
@@ -440,7 +492,7 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 				strncpy(audio.audio_queue[new_priority].audio_data[rear].data, new_data, strlen(new_data));
 				audio.audio_queue[new_priority].rear = rear;
 				audio.audio_queue[new_priority].front = front;
-				audio.total_nums++;
+				
 				Helios_Mutex_Unlock(audio.queue_mutex);
 			}
 			else
@@ -448,6 +500,7 @@ STATIC mp_obj_t helios_play_file_start(size_t n_args, const mp_obj_t *args, mp_m
 				Helios_Mutex_Unlock(audio.queue_mutex);
 				return mp_obj_new_int(-2);
 			}
+			
 			return mp_obj_new_int(1);
 	    }
 	}
@@ -694,10 +747,158 @@ STATIC mp_obj_t helios_play_stream_seek(size_t n_args, const mp_obj_t *args, mp_
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(helios_play_stream_seek_obj, 1, helios_play_stream_seek);
 #endif
 
+#if defined (PLAT_ASR) || defined (PLAT_Unisoc)
+STATIC const mp_arg_t tone_allowed_args[] = {
+    { MP_QSTR_tone,    	MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
+    { MP_QSTR_time,    	MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 500} },
+};
+
+static Helios_OSTimer_t aud_tone_timer = 0;
+static Helios_Thread_t aud_tone_thread_id = 0;
+static Helios_MsgQ_t aud_tone_queue_msg = 0;
+
+static void helios_aud_tone_play_cb(void *argv) {
+	uint8_t audio_msg = 1;
+	Helios_MsgQ_Put(aud_tone_queue_msg, (const void *)&audio_msg, sizeof(uint8_t), HELIOS_NO_WAIT);
+}
+
+static void helios_aud_tone_stop_task(void *argv)
+{
+	HELIOS_AUDIO_LOG("helios_aud_tone_dtmf_stop_task start...\r\n");
+	uint8_t audio_msg = 0;
+	int ret = 0;
+	while (1)
+	{
+		ret = Helios_MsgQ_Get(aud_tone_queue_msg, (void *)&audio_msg, sizeof(uint8_t), HELIOS_WAIT_FOREVER);
+		if (ret == 0)
+		{
+			switch (audio_msg)
+			{
+				case 1:
+					HELIOS_AUDIO_LOG("----Aud Tone Stop---\r\n");
+					Helios_Audio_Stop_Tone();
+					break;
+				default:
+					break;
+			}
+		}
+	}
+}
+
+
+//dial tone,ring back tone
+STATIC mp_obj_t helios_aud_tone_play(size_t n_args, const mp_obj_t *p_args, mp_map_t *kw_args)
+{
+	enum { ARG_tone, ARG_time};
+	
+    mp_arg_val_t args[MP_ARRAY_SIZE(tone_allowed_args)];
+    mp_arg_parse_all(n_args - 1, p_args + 1, kw_args,
+        MP_ARRAY_SIZE(tone_allowed_args), tone_allowed_args, args);
+
+	unsigned int time = 0;
+	int ret = 0;
+	int tone = 0;
+	
+	audio_obj_t *self = MP_OBJ_TO_PTR(p_args[0]);
+	
+	tone = args[ARG_tone].u_int;
+	time = args[ARG_time].u_int;
+
+	if(tone > 22 || tone < 0) 
+	{
+		mp_raise_ValueError("Parameter error\n");
+		return mp_obj_new_int(-1);
+	}
+	
+#if defined (PLAT_ASR)
+	if(aud_tone_timer == 0)
+	{
+		aud_tone_timer = Helios_OSTimer_Create();
+	}
+	
+	if(aud_tone_timer == 0)
+	{
+		return mp_obj_new_int(-1);
+	}
+
+	if(0 != time)
+	{
+	    Helios_OSTimerAttr OSTimerAttr = {
+	        .ms = (uint32_t)time,
+	        .cycle_enable = 0,
+	        .cb = helios_aud_tone_play_cb,
+	        .argv = (void *)self
+	    };
+		ret = Helios_OSTimer_Start(aud_tone_timer, &OSTimerAttr);
+	}
+
+	if(ret)
+	{
+		HELIOS_AUDIO_LOG("Timer starte failed\r\n");
+	}
+	HELIOS_AUDIO_LOG("Timer started\r\n");
+
+	if(ret != 0) 
+	{
+		Helios_Audio_Stop_Tone();
+		if(aud_tone_timer != 0) 
+		{
+			ret = Helios_OSTimer_Stop(aud_tone_timer);
+		}
+		return mp_obj_new_int(-1);
+	}
+
+	if(0 != time && 0 == aud_tone_thread_id)
+	{
+		Helios_ThreadAttr attr = {0};
+		attr.name = "aud_tone_stop";
+		attr.stack_size = 4096;
+		attr.priority = 95;
+		attr.entry = helios_aud_tone_stop_task;
+
+		aud_tone_queue_msg = Helios_MsgQ_Create(10, sizeof(uint8_t));
+		if (!aud_tone_queue_msg)
+		{
+			return mp_obj_new_int(-1);
+		}
+		
+		aud_tone_thread_id = Helios_Thread_Create(&attr);
+		if (aud_tone_thread_id == 0)
+		{
+			Helios_MsgQ_Delete(aud_tone_queue_msg);
+			return mp_obj_new_int(-1);
+		}
+	}
+#endif
+
+	ret = Helios_Audio_Play_Tone(tone, (uint32_t)time);
+	if(ret != 0)
+	{
+		return mp_obj_new_int(-1);
+	}
+	
+    return mp_obj_new_int(0);
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(mp_helios_aud_tone_play_obj, 1, helios_aud_tone_play);
+
+STATIC mp_obj_t helios_aud_tone_play_stop(mp_obj_t self_in)
+{
+	int ret = Helios_Audio_Stop_Tone();
+	if(aud_tone_timer != 0) 
+		ret = Helios_OSTimer_Stop(aud_tone_timer);
+	return mp_obj_new_int(ret);
+}
+
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(helios_aud_tone_play_stop_obj, helios_aud_tone_play_stop);
+
+#endif
+
 
 STATIC mp_obj_t helios_audio___del__(mp_obj_t self_in)
 {
 	uint8_t i = 0;
+	audio_obj_t *self = MP_OBJ_TO_PTR(self_in);
 	Helios_Mutex_Lock(audio.queue_mutex, HELIOS_WAIT_FOREVER);
 	for (i=0; i<QUEUE_NUMS; i++)
 	{
@@ -707,10 +908,11 @@ STATIC mp_obj_t helios_audio___del__(mp_obj_t self_in)
 	audio.cur_breakin  = 0;
 	audio.total_nums = 0;
 	//audio.audio_state = AUDIO_IDLE;
-	audio.user_call_stop = 1;
+	audio.user_call_stop = 0;
 	Helios_Mutex_Unlock(audio.queue_mutex);
     g_audio_callback = NULL;
     g_audio_speakerpa_callback = NULL;
+    audio_obj[self->device] = NULL;
 
 	int ret = Helios_Audio_FilePlayStop();
 	return mp_obj_new_int(ret);
@@ -732,13 +934,14 @@ STATIC const mp_rom_map_elem_t audio_locals_dict_table[] = {
 #if defined (PLAT_ASR) || defined (PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_set_pa), MP_ROM_PTR(&helios_set_pa_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_setSpeakerpaCallback), MP_ROM_PTR(&helios_set_speakerpa_callback_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_aud_tone_play), MP_ROM_PTR(&mp_helios_aud_tone_play_obj) },
+	{ MP_ROM_QSTR(MP_QSTR_aud_tone_play_stop), MP_ROM_PTR(&helios_aud_tone_play_stop_obj) },
 #endif
 #if defined (PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_StreamJump), MP_ROM_PTR(&helios_play_stream_jump_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_StreamPause), MP_ROM_PTR(&helios_play_stream_pause_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_StreamContinue), MP_ROM_PTR(&helios_play_stream_continue_obj) },
 	{ MP_ROM_QSTR(MP_QSTR_StreamSeek), MP_ROM_PTR(&helios_play_stream_seek_obj) },
-
 #endif
 };
 STATIC MP_DEFINE_CONST_DICT(audio_locals_dict, audio_locals_dict_table);

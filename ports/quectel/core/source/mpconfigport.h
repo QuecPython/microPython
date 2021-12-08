@@ -206,6 +206,9 @@
 #define MICROPY_MAKE_POINTER_CALLABLE(p) ((void*)((mp_uint_t)(p) | 1))
 #define MICROPY_ENABLE_FINALISER (1) // Pawn 2020/11/03
 
+#define MICROPY_ENABLE_DEVICE_REPORT          (1)
+#define MICROPY_ENABLE_CALLBACK_DEAL          (1)
+
 
 #define UINT_FMT "%lu"
 #define INT_FMT "%ld"
@@ -282,6 +285,14 @@ extern const struct _mp_obj_module_t mp_module_ethernet;
 #else
 #define MICROPY_PORT_BUILTIN_MODULES_ETHERNET
 #endif
+
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
+extern const struct _mp_obj_module_t mp_module_wifilocator;
+#define MICROPY_PORT_BUILTIN_MODULES_WIFILOCATOR { MP_OBJ_NEW_QSTR(MP_QSTR___wifiLocator), (mp_obj_t)&mp_module_wifilocator },
+#else
+#define MICROPY_PORT_BUILTIN_MODULES_WIFILOCATOR
+#endif
+
 
 #if defined(PLAT_ASR) || defined(PLAT_Unisoc)|| defined(PLAT_RDA) || defined(PLAT_Qualcomm)
 extern const struct _mp_obj_type_t mp_fota_type;
@@ -421,6 +432,7 @@ extern const struct _mp_obj_module_t mp_module_qrcode;
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_wifiScan), (mp_obj_t)&mp_module_wifiscan},\
 		{ MP_OBJ_NEW_QSTR(MP_QSTR_audio), (mp_obj_t)&mp_module_audio},\
 		MICROPY_PORT_BUILTIN_MODULES_ETHERNET \
+		MICROPY_PORT_BUILTIN_MODULES_WIFILOCATOR \
 		MICROPY_PORT_BUILTIN_MODULES_FOTA \
 		MICROPY_PORT_BUILTIN_MODULES_LVGL \
 		MICROPY_PORT_BUILTIN_MODULES_QRCODE \

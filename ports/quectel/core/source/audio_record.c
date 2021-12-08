@@ -34,6 +34,7 @@
 #include "helios_os.h"
 #include "py/objstr.h"
 #include "helios_ringbuf.h"
+#include "callbackdeal.h"
 
 #define RECORD_BUFFER_MAX   (uint)10*1024
 
@@ -98,6 +99,11 @@ STATIC mp_obj_t audio_record_make_new(const mp_obj_type_t *type, size_t n_args, 
 		{
 			mp_raise_ValueError("invalid device index, the value of device should be in[0,2]");
 		}
+
+		if (!audio_channel_check(self->device))
+		{
+			mp_raise_msg_varg(&mp_type_ValueError, "The current platform does not support device %d.", self->device);
+		}
 	}
 	audio_record_printf("create record obj, n_args = %d, device = %d\r\n", n_args, self->device);
 	
@@ -122,12 +128,30 @@ static int helios_file_record_cb(char *p_data, int len, Helios_EnumAudRecordStat
 	{
 		audio_record_printf("[audio_record] callback start.\r\n");
 		//ret = mp_sched_schedule_ex(g_record_callback, mp_obj_new_int(res));
+#if MICROPY_ENABLE_CALLBACK_DEAL
+		st_CallBack_AudioRecord *record = malloc(sizeof(st_CallBack_AudioRecord));
+	    if(NULL != record) {
+	        record->record_type = RECORE_TYPE_FILE;
+	        record->p_data = malloc(strlen(p_data) + 1);
+	        if(NULL == record->p_data)
+	        {
+                return -1;
+	        }
+    	    memcpy(record->p_data, p_data, strlen(p_data));
+    	    record->p_data[strlen(p_data)] = 0;
+    	    record->len = len;
+    	    record->res = res;
+    	    record->callback = *g_record_callback;
+    	    qpy_send_msg_to_callback_deal_thread(CALLBACK_TYPE_ID_AUDIO_RECORD, record);
+    	}
+#else
 		mp_obj_t audio_cb[3] = {
 			mp_obj_new_str(p_data,strlen(p_data)),
 			mp_obj_new_int(len),
 			mp_obj_new_int(res),
 		};
-		ret = mp_sched_schedule_ex(g_record_callback, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));	
+		ret = mp_sched_schedule_ex(g_record_callback, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));
+#endif
 		audio_record_printf("[audio_record] callback end.\r\n");
 	}
 	else
@@ -184,7 +208,7 @@ static int check_format(char *path) {
 	}  else if(strncmp(st_old, "mp3", 3)==0) {
 		return FORMAT_MP3;
 	} else {
-		return FORMAT_AMR;
+		return -3;
 	}
 }
 
@@ -223,15 +247,26 @@ static int helios_stream_record_cb(char *p_data, int len, Helios_EnumAudRecordSt
 		if(callback_cur == NULL) {
 			return -1;
 		}
-		char* p_data_buf = "stream";
 		if(res == HELIOS_AUD_RECORD_CLOSE) send_len = pcm_data_size;
+    #if MICROPY_ENABLE_CALLBACK_DEAL
+		st_CallBack_AudioRecord *record = malloc(sizeof(st_CallBack_AudioRecord));
+	    if(NULL != record) {
+	        record->record_type = RECORE_TYPE_STREAM;
+    	    record->p_data = "stream";
+    	    record->len = send_len;
+    	    record->res = res;
+    	    record->callback = *callback_cur;
+    	    qpy_send_msg_to_callback_deal_thread(CALLBACK_TYPE_ID_AUDIO_RECORD, record);
+    	}
+    #else
+		char* p_data_buf = "stream";
 		mp_obj_t audio_cb[3] = {
 			mp_obj_new_str(p_data_buf,strlen(p_data_buf)),
 			mp_obj_new_int(send_len),
 			mp_obj_new_int(res),
 		};
-
 		mp_sched_schedule_ex(callback_cur, MP_OBJ_FROM_PTR(mp_obj_new_list(3, audio_cb)));
+    #endif
 	}
 
 	return 0;
@@ -283,7 +318,7 @@ STATIC mp_obj_t helios_audio_record_stream_start(size_t n_args, const mp_obj_t *
 
 	callback_cur = self->callback;
 
-	if(format > HELIOS_AUDIO_FORMAT_MAX || !(samplerate == 8000 || samplerate == 16000)) {
+	if((format != HELIOS_AUDIO_FORMAT_AMRNB && format != HELIOS_AUDIO_FORMAT_AMRWB) || !(samplerate == 8000 || samplerate == 16000)) {
 		mp_raise_ValueError("Parameter error\n");
 		return mp_obj_new_int(-1);
 	}
@@ -767,6 +802,36 @@ STATIC mp_obj_t helios_audio_record_gain(size_t n_args, const mp_obj_t *args)
 	return mp_obj_new_int(0);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mp_helios_record_file_gain_obj,3,3, helios_audio_record_gain);
+
+/*=============================================================================*/
+/* FUNCTION: helios_amrenc_dtx_enable                                          */
+/*=============================================================================*/
+/*!@brief 		: amr record dtx enable.
+ * @param[in] 	: 
+ * @param[out] 	: 
+ * @return		: 
+ */
+/*=============================================================================*/
+STATIC mp_obj_t helios_amrenc_dtx_enable(size_t n_args, const mp_obj_t *args)
+{
+    int ret = 0;
+    int enable = 0;
+    if(1 == n_args) {
+        Helios_Audio_AmrEnc_Dtx_Enable(&enable, 1);
+	    return mp_obj_new_int(enable);
+    }
+    
+	int on_off = mp_obj_get_int(args[1]);
+	if (on_off < 0 || on_off > 1)
+	{
+		mp_raise_ValueError("invalid value, on_off must be 0 or 1.");
+		return mp_obj_new_int(-1);
+	}
+	
+	Helios_Audio_AmrEnc_Dtx_Enable(&on_off, 0);
+	return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(helios_amrenc_dtx_enable_obj, 1, 2, helios_amrenc_dtx_enable);
 #endif
 
 static int play_callback(char *p_data, int len, Helios_EnumAudPlayerState state)
@@ -838,7 +903,10 @@ STATIC mp_obj_t helios_audio_deinit(mp_obj_t self_in)
 	record_state = 0;
 	ret = Helios_Audio_FileRecordStop();
 	ret = Helios_Audio_StreamRecordStop();
-	
+#if defined(PLAT_ASR)
+    int enable = 0;
+	Helios_Audio_AmrEnc_Dtx_Enable(&enable, 0);
+#endif
 	return mp_obj_new_int(ret);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_helios_record_deinit_obj, helios_audio_deinit);
@@ -863,6 +931,7 @@ STATIC const mp_rom_map_elem_t audio_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_WAV), MP_ROM_INT(HELIOS_AUDIO_FORMAT_WAVPCM) },
     { MP_ROM_QSTR(MP_QSTR_AMRNB), MP_ROM_INT(HELIOS_AUDIO_FORMAT_AMRNB) },
     { MP_ROM_QSTR(MP_QSTR_AMRWB), MP_ROM_INT(HELIOS_AUDIO_FORMAT_AMRWB) },
+    { MP_ROM_QSTR(MP_QSTR_amrEncDtx_enable), MP_ROM_PTR(&helios_amrenc_dtx_enable_obj) },
 #endif
     { MP_ROM_QSTR(MP_QSTR_play),		MP_ROM_PTR(&mp_helios_record_file_play_obj) 	},
 #ifdef PLAT_Unisoc

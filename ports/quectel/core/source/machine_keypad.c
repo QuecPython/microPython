@@ -24,7 +24,7 @@
  ******************************************************************************
  */
 
-#if defined(PLAT_ASR) 
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -169,4 +169,4 @@ STATIC mp_obj_t machine_keypad_make_new(const mp_obj_type_t *type, size_t n_args
 }
 
 #endif
-#endif /* MICROPY_PY_KEYPAD && PLAT_ASR */
+#endif /* MICROPY_PY_KEYPAD && PLAT_ASR || PLAT_Unisoc*/

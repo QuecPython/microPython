@@ -29,11 +29,14 @@
 #include "py/mpstate.h"
 
 #if MICROPY_KBD_EXCEPTION
-
+#include "interrupt_char.h"
 int mp_interrupt_char = -1;
 
 void mp_hal_set_interrupt_char(int c) {
     mp_interrupt_char = c;
 }
 
+SET_MAINPY_RUNNING_TIMER_CALLBACK_DEF
+#else
+void mp_hal_set_interrupt_char(int c) {(void)c;return;}
 #endif

@@ -34,6 +34,7 @@
 #include "readline.h"
 #include "mpprint.h"
 #include "objmodule.h"
+#include "callbackdeal.h"
 
 #if !defined(PLAT_RDA)
 #if CONFIG_MBEDTLS
@@ -115,8 +116,11 @@ static char heap[1024 * 512];
 extern pyexec_mode_kind_t pyexec_mode_kind;
 extern void machine_timer_deinit_all(void);
 
+#if MICROPY_KBD_EXCEPTION
 MAINPY_RUNNING_FLAG_DEF
 MAINPY_INTERRUPT_BY_KBD_FLAG_DEF
+SET_MAINPY_RUNNING_TIMER_DEF
+#endif
 
 void quecpython_task(void *arg)
 {
@@ -127,8 +131,8 @@ void quecpython_task(void *arg)
 #if !defined(PLAT_RDA) && !defined(PLAT_Qualcomm)
     //Added by Freddy @20210520 在线程sleep时，通过wait queue的方式超时代替实际的sleep,
     //当有callback执行时，给此queue发消息即可快速执行callback
-    void quecpython_callback_deal_queue_create(void);
-    quecpython_callback_deal_queue_create();
+    void quecpython_main_thread_sleep_deal_queue_create(void);
+    quecpython_main_thread_sleep_deal_queue_create();
 #endif
 
 #if !defined(PLAT_RDA)
@@ -169,7 +173,11 @@ soft_reset:
 //  mp_obj_list_append(mp_sys_path, MP_OBJ_NEW_QSTR(MP_QSTR__slash_lib));
     mp_obj_list_init(mp_sys_argv, 0);
     readline_init0();
-	
+
+    #if MICROPY_ENABLE_CALLBACK_DEAL
+	qpy_callback_deal_init();
+    #endif
+    
 	// run boot-up scripts
 #if defined(PLAT_RDA)
     pyexec_frozen_module("_boot_RDA.py");
@@ -178,13 +186,25 @@ soft_reset:
 #else
     pyexec_frozen_module("_boot.py");
 #endif
-    if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL && MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE()) {
+    #if MICROPY_KBD_EXCEPTION
+    if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL && MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE()) 
+    #else
+    if (pyexec_mode_kind == PYEXEC_MODE_FRIENDLY_REPL)
+    #endif
+    {
+        #if MICROPY_KBD_EXCEPTION
+        MAINPY_RUNNING_FLAG_SET();
         int ret = pyexec_file_if_exists("/usr/main.py");
+        MAINPY_RUNNING_FLAG_CLEAR();
         if(RET_KBD_INTERRUPT == ret)
         {
             MAINPY_INTERRUPT_BY_KBD_FLAG_SET();
         }
+        #else
+        pyexec_file_if_exists("/usr/main.py");
+        #endif
     }
+    #if MICROPY_KBD_EXCEPTION
     else
     {
         MAINPY_INTERRUPT_BY_KBD_FLAG_CLEAR();
@@ -192,6 +212,7 @@ soft_reset:
 
     if(MAINPY_INTERRUPT_BY_KBD_FLAG_FALSE())
     {
+    #endif
     	for (;;) {
             if (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) {
                 if (pyexec_raw_repl() != 0) {
@@ -203,13 +224,18 @@ soft_reset:
                 }
             }
         }
+    #if MICROPY_KBD_EXCEPTION
     }
-    
+    #endif
     machine_timer_deinit_all();
 
 	#if MICROPY_PY_THREAD
 	//uart_printf("mp_thread_deinit in quecpython task.\r\n");
     mp_thread_deinit();
+    #endif
+    
+    #if MICROPY_ENABLE_CALLBACK_DEAL
+    qpy_callback_deal_deinit();
     #endif
 
     mp_module_deinit_all();

@@ -45,10 +45,13 @@ class GnssGetData:
             self.r2 = ure.search("GPGSV(.+?)M", gps_data)
             self.r3 = ure.search("GNVTG(.+?)M", gps_data)
             global fixFlag
-            if self.r1.group(0).split(",")[2] == 'A': #有效定位
-                fixFlag=1
+            if self.r1 is None:
+                fixFlag = 0
             else:
-                fixFlag=0
+                if self.r1.group(0).split(",")[2] == 'A': #有效定位
+                    fixFlag=1
+                else:
+                    fixFlag=0
         except:
             print("Exception:read gnss data error!!!!!!!!")
             raise
@@ -59,18 +62,24 @@ class GnssGetData:
     #获取GPS模块定位的经纬度信息
     def getLocation(self):
         if self.isFix() is 1:
+            if self.r is None:
+                return -1
             lat=float(self.r.group(0).split(",")[2])//100 +float(float(float(self.r.group(0).split(",")[2])%100)/60) #
             lat_d=self.r.group(0).split(",")[3]  #
             log=float(self.r.group(0).split(",")[4])//100 +float(float(float(self.r.group(0).split(",")[4])%100)/60) #
             log_d=self.r.group(0).split(",")[5]  #
             return lat,lat_d,log,log_d
         else:
-            return None
+            return -1
     #获取GPS模块授时的UTC时间
     def getUtcTime(self):
+        if self.r is None:
+            return -1
         return self.r.group(0).split(",")[1]
     #获取GPS模块定位模式
     def getLocationMode(self):
+        if self.r is None:
+            return -1
         if self.r.group(0).split(",")[6] is '0':
             #print('定位不可用或者无效')
             return 0
@@ -83,21 +92,31 @@ class GnssGetData:
  
     #获取GPS模块定位使用卫星数量
     def getUsedSateCnt(self):
+        if self.r is None:
+            return -1
         return self.r.group(0).split(",")[7]
     #获取GPS模块定位可见卫星数量
     def getViewedSateCnt(self):
+        if self.r2 is None:
+            return -1
         return self.r2.group(0).split(",")[3]
     #获取GPS模块定位方位角 范围：0~359。以真北为参考平面。
     def getCourse(self):
+        if self.r2 is None:
+            return -1
         return self.r2.group(0).split(",")[6]
     #获取GPS模块对地速度(单位:KM/h)
     def getSpeed(self):
+        if self.r1 is None:
+            return -1
         if self.r1.group(0).split(",")[7] == '':
             return None
         else:
             return float(self.r1.group(0).split(",")[7]) * 1.852
     #获取GPS模块定位大地高(单位:米)
     def getGeodeticHeight(self):
+        if self.r is None:
+            return -1
         return self.r.group(0).split(",")[9]
 
     

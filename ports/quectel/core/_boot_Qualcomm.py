@@ -54,20 +54,20 @@ def _call_by_user_apn():
     dataCall.setAutoConnect(int(pdp), 1)
 
     dataCall.recordApn(int(pdp), int(ipv), apn, usr, pwd, int(ath), 1)
-    dataCall.setAsynMode(1)
+    #dataCall.setAsynMode(1)
     ret = -1
     repeat_count = 2
     while (ret == -1) and (repeat_count >= 0):
         repeat_count -= 1
         ret = dataCall.start(int(pdp), int(ipv), apn, usr, pwd, int(ath))
-    dataCall.setAsynMode(0)
+    #dataCall.setAsynMode(0)
 
 
 def _auto_data_call():
-    _call_by_default_apn()
-    #try:
-        #_call_by_user_apn()
-    #except OSError as e:
+    try:
+        _call_by_user_apn()
+    except OSError as e:
+        _call_by_default_apn()
         #if e.args[0] == 2:
             # print('######user_apn.json not found!')
             #_call_by_default_apn()
@@ -89,7 +89,7 @@ def _repl_enable():
             json_data = ujson.load(fd)
             repl_flag = json_data.get("replFlag", 0)
             datacall_flag = json_data.get("datacallFlag",1)
-            misc.replEnable(repl_flag)
+            #misc.replEnable(repl_flag)
     else:
         with open("/usr/system_config.json", "w+", encoding='utf-8') as fd:
             repl_data = ujson.dumps({"replFlag": 0})
@@ -107,11 +107,9 @@ except Exception:
     print('error ocurs in boot step.')
 
 finally:
-    #global datacall_flag
-    #_repl_enable()
+    _repl_enable()
     if datacall_flag == 1:
         ret = _check_data_call()
         if ret == 0:
             _auto_data_call()
-
 

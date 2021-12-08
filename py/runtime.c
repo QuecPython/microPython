@@ -44,6 +44,8 @@
 #include "py/builtin.h"
 #include "py/stackctrl.h"
 #include "py/gc.h"
+#include "interrupt_char.h"
+
 
 #if MICROPY_DEBUG_VERBOSE // print debugging info
 #define DEBUG_PRINT (1)
@@ -81,6 +83,7 @@ void mp_init(void) {
     MP_STATE_VM(mp_kbd_exception).traceback_len = 0;
     MP_STATE_VM(mp_kbd_exception).traceback_data = NULL;
     MP_STATE_VM(mp_kbd_exception).args = (mp_obj_tuple_t *)&mp_const_empty_tuple_obj;
+    SET_MAINPY_RUNNING_TIMER_INIT();
     #endif
 
     #if MICROPY_ENABLE_COMPILER
@@ -162,6 +165,9 @@ void mp_deinit(void) {
     mp_thread_mutex_del(&MP_STATE_VM(gil_mutex));
     #endif
 
+    #if MICROPY_KBD_EXCEPTION
+    SET_MAINPY_RUNNING_TIMER_DEINIT();
+    #endif
     // mp_obj_dict_free(&dict_main);
     // mp_map_deinit(&MP_STATE_VM(mp_loaded_modules_map));
 }

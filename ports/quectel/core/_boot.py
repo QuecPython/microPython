@@ -15,6 +15,7 @@
 import gc
 import uos
 import ujson
+import dial
 import dataCall
 import backup_restore
 import app_fota
@@ -76,7 +77,11 @@ def _auto_data_call():
 
 
 def _check_data_call():
-    for pdp in range(1, 8):
+    retval = dial.getPdpRange()
+    min = retval[0]
+    max = retval[1]
+    # print('min={},max={}'.format(min, max))
+    for pdp in range(min, max+1):
         nw_sta = dataCall.getInfo(pdp, 2)
         if (nw_sta != -1) and (nw_sta[2][0] == 0) and (nw_sta[3][0] == 0):
             continue

@@ -148,11 +148,11 @@ STATIC const mp_rom_map_elem_t machine_i2c_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_read), MP_ROM_PTR(&machine_i2c_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_write), MP_ROM_PTR(&machine_i2c_write_obj) },
 	// class constants
-    { MP_ROM_QSTR(MP_QSTR_I2C0),       MP_ROM_INT(HELIOS_I2C0) },
-#if !defined(PLAT_Qualcomm)    
+    { MP_ROM_QSTR(MP_QSTR_I2C0),       MP_ROM_INT(HELIOS_I2C0) },  
     { MP_ROM_QSTR(MP_QSTR_I2C1),       MP_ROM_INT(HELIOS_I2C1) },
 #if !defined(PLAT_RDA)
     { MP_ROM_QSTR(MP_QSTR_I2C2),       MP_ROM_INT(HELIOS_I2C2) },
+#if !defined(PLAT_Qualcomm)  
     { MP_ROM_QSTR(MP_QSTR_I2C3),       MP_ROM_INT(HELIOS_I2C3) },
 #endif
 #endif

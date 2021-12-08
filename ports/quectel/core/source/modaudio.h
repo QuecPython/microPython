@@ -30,6 +30,20 @@ extern const mp_obj_type_t audio_audio_type;
 extern const mp_obj_type_t audio_record_type;
 
 
+typedef struct
+{
+	//char *model;
+	/*
+	** channel_support[0]-recever
+	** channel_support[1]-headphone
+	** channel_support[2]-speaker
+	** 
+	** channel_support[n] is 0, non-support 
+	** channel_support[n] is 1, support 
+	*/
+	uint8_t channel_support[3]; 
+}AudioChannelSupport_t;
+
 #ifdef __cplusplus
 }
 #endif

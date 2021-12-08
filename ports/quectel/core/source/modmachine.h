@@ -36,10 +36,11 @@ extern const mp_obj_type_t machine_extint_type;
 extern const mp_obj_type_t machine_rtc_type;
 extern const mp_obj_type_t machine_timer_type;
 extern const mp_obj_type_t machine_hard_i2c_type;
+extern const mp_obj_type_t machine_simulation_i2c_type;
 extern const mp_obj_type_t machine_hard_spi_type;
 extern const mp_obj_type_t machine_wdt_type;
 extern const mp_obj_type_t machine_nandflash_type;
-#if defined(PLAT_ASR)
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 extern const mp_obj_type_t machine_keypad_type;
 #endif
 

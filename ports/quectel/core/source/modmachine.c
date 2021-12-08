@@ -48,6 +48,7 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&machine_uart_type) },
 	{ MP_ROM_QSTR(MP_QSTR_SPI), MP_ROM_PTR(&machine_hard_spi_type) },
 	{ MP_ROM_QSTR(MP_QSTR_I2C), MP_ROM_PTR(&machine_hard_i2c_type) },
+	{ MP_ROM_QSTR(MP_QSTR_I2C_simulation), MP_ROM_PTR(&machine_simulation_i2c_type) },
 	{ MP_OBJ_NEW_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&machine_timer_type) },
 #if !defined(PLAT_Qualcomm)
 	{ MP_ROM_QSTR(MP_QSTR_RTC), MP_ROM_PTR(&machine_rtc_type) },
@@ -55,7 +56,7 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
 	{ MP_ROM_QSTR(MP_QSTR_LCD), MP_ROM_PTR(&machine_lcd_type) },
 	{ MP_ROM_QSTR(MP_QSTR_WDT), MP_ROM_PTR(&machine_wdt_type) },
 #endif
-#if defined(PLAT_ASR)
+#if defined(PLAT_ASR) || defined(PLAT_Unisoc)
 	{ MP_ROM_QSTR(MP_QSTR_KeyPad), MP_ROM_PTR(&machine_keypad_type) },
 #endif
 
