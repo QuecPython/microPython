@@ -191,6 +191,7 @@ bool mp_sched_schedule_ex(c_callback_t *callback, mp_obj_t arg)
             return mp_sched_schedule(callback->cb, arg);
         } else {
             mp_obj_t cb = mp_load_attr(callback->method_self, callback->method_name);
+            callback->cb = cb;//record a new boundmeth
             return mp_sched_schedule(cb, arg);
         }
     }

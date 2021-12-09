@@ -103,7 +103,7 @@ def getLogger(name="root"):
 def set_output(out):
     global _stream
     from machine import UART
-    if isinstance(out, UART):
+    if isinstance(out, UART) or out == usys.stderr or out == usys.stdout:
         _stream = out
     else:
         raise Exception("{} must extend UART".format(out))
